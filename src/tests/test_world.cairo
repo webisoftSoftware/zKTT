@@ -5,9 +5,10 @@ mod tests {
     // import test utils
     use dojo::utils::test::{spawn_test_world, deploy_contract};
     // import test utils
-    use dojo_starter::{
-        systems::{actions::{actions, IActionsDispatcher, IActionsDispatcherTrait}},
-        models::{{Position, Vec2, position, Moves, Direction, moves}}
+    use zktt::{
+        systems::{play::{play, IPlayDispatcher, IPlayDispatcherTrait}},
+        models::{CardComponent, PlayerComponent, HandComponent, DealerComponent,
+                      DeckComponent, EnumTxError}
     };
 
     #[test]
@@ -19,40 +20,50 @@ mod tests {
         let mut models = array![position::TEST_CLASS_HASH, moves::TEST_CLASS_HASH];
 
         // deploy world with models
-        let world = spawn_test_world(["dojo_starter"].span(), models.span());
+        let world = spawn_test_world(["zktt"].span(), models.span());
 
         // deploy systems contract
         let contract_address = world
             .deploy_contract('salt', actions::TEST_CLASS_HASH.try_into().unwrap());
-        let actions_system = IActionsDispatcher { contract_address };
 
-        world.grant_writer(dojo::utils::bytearray_hash(@"dojo_starter"), contract_address);
+        let connect_system = IConnectDispatcher { contract_address };
+        let play_system = IPlayDispatcher { contract_address };
+        let disconnect_system = IDisconnectDispatcher { contract_address };
 
-        // call spawn()
-        actions_system.spawn();
+        world.grant_writer(dojo::utils::bytearray_hash(@"zktt"), contract_address);
 
-        // call move with direction right
-        actions_system.move(Direction::Right);
+        // Call connect functions.
+        connect_system.join("0x07da79ef7d6");
+
+        // call play functions.
+        play_system.distribute_cards();
+        play_system.draw();
+
+
+        let player = PlayerComponent::new("0xffffffffff", "nami2301", 3, 0);
+        let card1 = CardComponent::new(player,
+            name: "1M".to_string(),
+            description: "1 Million Dollars".to_string(),
+            card_type: EnumCardCategory::Cash,
+            value: 1,
+            rank: 0);
 
         // Check world state
-        let moves = get!(world, caller, Moves);
+        let hand = get!(world, caller, HandComponent);
+        let player = get!(world, caller, Player);
 
-        // casting right direction
-        let right_dir_felt: felt252 = Direction::Right.into();
+        // Check that we have another card in our hand.
+        assert(hand.cards.len() == 6, 'incorrect number of cards after drawing');
 
-        // check moves
-        assert(moves.remaining == 99, 'moves is wrong');
+        // Check that we have one less move.
+        assert(player.moves_remaining == 2, 'incorrect number of moves remaining');
 
-        // check last direction
-        assert(moves.last_direction.into() == right_dir_felt, 'last direction is wrong');
+        play_system.play(card1);
 
-        // get new_position
-        let new_position = get!(world, caller, Position);
+        // Check that we have one less move.
+        assert(player.moves_remaining == 1, 'incorrect number of moves remaining');
 
-        // check new position x
-        assert(new_position.vec.x == 11, 'position x is wrong');
-
-        // check new position y
-        assert(new_position.vec.y == 10, 'position y is wrong');
+        // Check that we have one less card in our hand.
+        assert(hand.cards.len() == 5, 'incorrect number of cards after drawing');
     }
 }

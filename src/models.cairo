@@ -1,88 +1,135 @@
 use starknet::ContractAddress;
 
-#[derive(Copy, Drop, Serde)]
+#[derive(Copy, Drop, Serde, Introspect)]
 #[dojo::model]
-pub struct Moves {
+struct PlayerComponent {
     #[key]
-    pub player: ContractAddress,
-    pub remaining: u8,
-    pub last_direction: Direction,
-    pub can_move: bool,
+    pub player_id: ContractAddress,
+    pub username: String,
+    pub moves_remaining: u8,
+    pub deck: DeckComponent,
+    pub hands: HandComponent,
+    pub score: u32,
 }
-
-#[derive(Drop, Serde)]
-#[dojo::model]
-pub struct DirectionsAvailable {
-    #[key]
-    pub player: ContractAddress,
-    pub directions: Array<Direction>,
-}
-
-#[derive(Copy, Drop, Serde)]
-#[dojo::model]
-pub struct Position {
-    #[key]
-    pub player: ContractAddress,
-    pub vec: Vec2,
-}
-
-
-#[derive(Serde, Copy, Drop, Introspect)]
-pub enum Direction {
-    None,
-    Left,
-    Right,
-    Up,
-    Down,
-}
-
 
 #[derive(Copy, Drop, Serde, Introspect)]
-pub struct Vec2 {
-    pub x: u32,
-    pub y: u32
+#[dojo::model]
+pub struct HandComponent {
+    pub cards: Array<Card>
 }
 
+#[derive(Copy, Drop, Serde, Introspect)]
+#[dojo::model]
+pub struct DeckComponent {
+    pub cards: Array<Card>
+}
 
-impl DirectionIntoFelt252 of Into<Direction, felt252> {
-    fn into(self: Direction) -> felt252 {
-        match self {
-            Direction::None => 0,
-            Direction::Left => 1,
-            Direction::Right => 2,
-            Direction::Up => 3,
-            Direction::Down => 4,
+#[derive(Copy, Drop, Serde, Introspect)]
+#[dojo::model]
+pub struct CardComponent {
+    pub name: String,
+    pub description: String,
+    pub card_category: EnumCardCategory,
+    pub value: u8,
+    pub rank: u8
+}
+
+impl PlayerImpl for PlayerComponent {
+    fn new(player_id: ContractAddress, username: String, moves_remaining: u8, score: u32) -> Self {
+        return Self {
+            player_id: player_id,
+            username: username,
+            moves_remaining: 3,
+            score: score,
+        };
+    }
+}
+
+impl HandComponentImpl for HandComponent {
+    fn new(cards: Array<Card>) -> Self {
+        return Self {
+            cards: cards,
         }
     }
 }
 
-
-#[generate_trait]
-impl Vec2Impl of Vec2Trait {
-    fn is_zero(self: Vec2) -> bool {
-        if self.x - self.y == 0 {
-            return true;
+impl DeckComponentImpl for DeckComponent {
+    fn new(cards: Array<Card>) -> Self {
+        return Self {
+            cards: cards
         }
-        false
     }
+}
 
-    fn is_equal(self: Vec2, b: Vec2) -> bool {
-        self.x == b.x && self.y == b.y
+impl CardComponentImpl for CardComponent {
+    fn new(name: String, description: String, card_category: EnumCardCategory,
+        value: u8, rank: u8) -> Self {
+        return Self {
+            name: name,
+            description: description,
+            card_category: card_category,
+            value: value,
+            rank: rank
+        };
     }
+    
+    fn compare_rank_with(self: ref CardComponent, field: @CardComponent) -> EnumCardCompare {
+        if self.rank > field.rank {
+            return EnumCardCompare::Bigger();
+        }
+        
+        if self.rank < field.rank {
+            return EnumCardCompare::Smaller();
+        }
+        
+        return EnumCardCompare::Equal();
+    }
+}
+
+#[derive(Copy, Drop, Serde, ParitalEq, Introspect)]
+enum EnumTxError {
+    IncorrectTransaction: (),
+    InvalidMove: (),
+    UnknownPlayer: (),
+    LobbyFull: (),
+    LobbyDoesNotExist: ()
+}
+
+#[derive(Copy, Drop, Serde, ParitalEq, Introspect)]
+enum EnumCardCompare {
+    Smaller: (),
+    Equal: (),
+    Bigger: ()
+}
+
+#[derive(Copy, Drop, Serde, ParitalEq, Introspect)]
+enum EnumCardCategory {
+    Cash: (),
+    Property: (),
+    Special: ()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Position, Vec2, Vec2Trait};
+    use super::{CardComponent, Card, PlayerComponent, EnumCardCategory};
 
     #[test]
-    fn test_vec_is_zero() {
-        assert(Vec2Trait::is_zero(Vec2 { x: 0, y: 0 }), 'not zero');
-    }
-
-    #[test]
-    fn test_vec_is_equal() {
-        let position = Vec2 { x: 420, y: 0 };
-        assert(position.is_equal(Vec2 { x: 420, y: 0 }), 'not equal');
+    fn test_is_equal() {
+        let player = PlayerComponent::new("0xffffffffff", "nami2301", 3, 0);
+        let card1 = CardComponent::new(player,
+            name: "1M".to_string(),
+            description: "1 Million Dollars".to_string(),
+            card_type: EnumCardCategory::Cash,
+            value: 1,
+            rank: 0);
+        
+        let card2 = CardComponent::new(player,
+            name: "2M".to_string(),
+            description: "2 Million Dollars".to_string(),
+            card_type: EnumCardCategory::Cash,
+            value: 2,
+            rank: 0);
+        
+        assert(card1.compare_rank_with(card2), 'Ranks should be equal');
     }
 }
