@@ -3,100 +3,116 @@ use starknet::ContractAddress;
 
 #[dojo::interface]
 trait IPlay {
-    fn distribute_cards(ref world: IWorldDispatcher);
-    fn draw(ref world: IWorldDispatcher) -> Result<(), EnumTxError>;
+    fn distribute_cards(ref world: IWorldDispatcher, dealer_address: ContractAddress) -> Result<(), EnumTxError>;
+    fn draw(ref world: IWorldDispatcher, dealer_address: ContractAddress) -> Result<(), EnumTxError>;
     fn play(ref world: IWorldDispatcher, card: CardComponent) -> Result<(), EnumTxError>;
     fn take_from(ref world: IWorldDispatcher, card: CardComponent, recipient: ContractAddress) -> Result<(), EnumTxError>;
     fn give_to(ref world: IWorldDispatcher, card: CardComponent, recipient: ContractAddress) -> Result<(), EnumTxError>;
-    fn swap_with(ref World: IWorldDispatcher, card_given: CardComponent,
+    fn swap_with(ref world: IWorldDispatcher, card_given: CardComponent,
         recipient: ContractAddress, card_taken: CardComponent) -> Result<(), EnumTxError>;
+    fn assign_winner(ref world: IWorldDispatcher, player: PlayerComponent) -> Result<(), EnumTxError>;
 }
 
 #[dojo::contract]
 mod play {
     use super::IPlay;
-    use starknet::get_caller_address;
-    use zktt::models::{CardComponent, PlayerComponent, HandComponent, DealerComponent,
-     DeckComponent, EnumTxError};
+    use starknet::{ContractAddress, get_caller_address};
+    use zktt::models::{CardComponent, PlayerComponent, HandComponent, DeckComponent, EnumTxError,
+     IPlayerComponent, ICardComponent, IHandComponent, IDeckComponent, DealerComponent};
 
-    #[derive(Copy, Drop, Serde)]
+    #[derive(Drop, Serde, Introspect)]
     #[dojo::model]
     #[dojo::event]
     struct CardDrew {
         #[key]
-        from: Player,
+        from: PlayerComponent,
         card: CardComponent
     }
 
-    #[derive(Copy, Drop, Serde)]
+    #[derive(Drop, Serde, Introspect)]
     #[dojo::model]
     #[dojo::event]
     struct CardPlayed {
         #[key]
-        from: Player,
+        from: PlayerComponent,
         card: CardComponent
     }
 
-    #[derive(Copy, Drop, Serde)]
+    #[derive(Drop, Serde, Introspect)]
     #[dojo::model]
     #[dojo::event]
     struct CardMoved {
         #[key]
-        from: Player,
-        to: Player,
+        from: PlayerComponent,
+        #[key]
+        to: PlayerComponent,
         card: CardComponent
+    }
+
+    #[derive(Drop, Serde, Introspect)]
+    #[dojo::model]
+    #[dojo::event]
+    struct HasWon {
+        #[key]
+        winner: PlayerComponent,
+        score: u32
+    }
+
+    fn dojo_init() {
+
     }
 
     #[abi(embed_v0)]
     impl IPlayImpl of IPlay<ContractState> {
-        fn draw(ref world: IWorldDispatcher) {
+        fn distribute_cards(ref world: IWorldDispatcher, dealer_address: ContractAddress) -> Result<(), EnumTxError> {
+            return Result::Ok(());
+        }
+
+        fn draw(ref world: IWorldDispatcher, dealer_address: ContractAddress) -> Result<(), EnumTxError> {
             // Get the address of the current caller, possibly the player's address.
             let player = get_caller_address();
 
             // Retrieve the player's current hand from the world.
-            let mut hand = get!(world, player, (HandComponent));
+            let mut player_component = get!(world, player, (PlayerComponent));
+            let mut dealer = get!(world, dealer_address, (DealerComponent));
 
-            // Retrive the card 'on top' of the stack and add it to the player's hand.
-            let mut dealer = DealerComponent::get(world);
-            hand.add(dealer.pop_card());
+            // Retrieve the card 'on top' of the stack and add it to the player's hand.
+            return match dealer.deck.cards.pop_front() {
+                Option::Some(card) => {
+                    player_component.hand.add(card);
 
-            set!(world, (HandComponent::new(player, hand)));
+                    set!(world, (player_component));
+
+                    Result::Ok(())
+                },
+                Option::None(_) => {
+                    println!("Error occured in draw(), E: Card popped is None!",);
+                    Result::Err(EnumTxError::IncorrectTransaction)
+                }
+            };
         }
 
-        fn play(ref world: IWorldDispatcher, card: CardComponent) {
-            // Get the address of the current caller, possibly the player's address.
-            let player = get_caller_address();
+        fn play(ref world: IWorldDispatcher, card: CardComponent) -> Result<(), EnumTxError> {
+            return Result::Ok(());
+        }
 
-            // Retrieve the player's current position and moves data from the world.
-            let (mut position, mut moves) = get!(world, player, (HandComponent, DeckComponent));
+        fn take_from(ref world: IWorldDispatcher, card: CardComponent, recipient: ContractAddress) -> Result<(), EnumTxError> {
+            return Result::Ok(());
+        }
 
-            // Deduct one from the player's remaining moves.
-            moves.remaining -= 1;
+        fn give_to(ref world: IWorldDispatcher, card: CardComponent, recipient: ContractAddress) -> Result<(), EnumTxError> {
+            return Result::Ok(());
+        }
 
-            // Update the last direction the player moved in.
-            moves.last_direction = direction;
+        fn swap_with(ref world: IWorldDispatcher, card_given: CardComponent,
+            recipient: ContractAddress, card_taken: CardComponent) -> Result<(), EnumTxError> {
+            return Result::Ok(());
+        }
 
-            // Calculate the player's next position based on the provided direction.
-            let next = next_position(position, direction);
-
-            // Update the world state with the new moves data and position.
-            set!(world, (moves, next));
-            // Emit an event to the world to notify about the player's move.
-            emit!(world, (Played { player, direction }));
+        fn assign_winner(ref world: IWorldDispatcher, player: PlayerComponent) -> Result<(), EnumTxError> {
+            return Result::Ok(());
         }
     }
 }
 
 // Internal functions.
-
-/// Assign a winner when a player has 3 properties in their deck.
-fn assign_winner(ref world: IWorldDispatcher, ref player: PlayerComponent) -> () {
-   // Retrieve the player's current score from the world and update it.
-   let mut player = get!(world, player, (PlayerComponent));
-   player.score + 1;
-
-   set!(world, (player));
-
-   // Anounce the winner.
-   emit!(world, (HasWon { player }));
-}

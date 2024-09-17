@@ -1,70 +1,176 @@
 use starknet::ContractAddress;
 
-#[derive(Copy, Drop, Serde, Introspect)]
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+/////////////////////////////// COMPONENTS /////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+
+#[derive(Drop, Serde, Introspect)]
 #[dojo::model]
 struct PlayerComponent {
     #[key]
-    pub player_id: ContractAddress,
-    pub username: String,
-    pub moves_remaining: u8,
+    pub username: felt252,
+    pub hand: HandComponent,
     pub deck: DeckComponent,
-    pub hands: HandComponent,
+    pub moves_remaining: u8,
     pub score: u32,
 }
 
-#[derive(Copy, Drop, Serde, Introspect)]
+#[derive(Drop, Serde, Introspect)]
 #[dojo::model]
-pub struct HandComponent {
-    pub cards: Array<Card>
+struct DealerComponent {
+    #[key]
+    pub dealer_id: ContractAddress,
+    pub deck: DeckComponent,
 }
 
-#[derive(Copy, Drop, Serde, Introspect)]
-#[dojo::model]
+#[derive(Drop, Serde, Introspect)]
+pub struct HandComponent {
+    pub cards: Array<CardComponent>
+}
+
+#[derive(Drop, Serde, Introspect)]
 pub struct DeckComponent {
-    pub cards: Array<Card>
+    pub cards: Array<CardComponent>
 }
 
 #[derive(Copy, Drop, Serde, Introspect)]
 #[dojo::model]
 pub struct CardComponent {
-    pub name: String,
-    pub description: String,
+    #[key]
+    pub name: felt252,
+    pub description: felt252,
     pub card_category: EnumCardCategory,
     pub value: u8,
     pub rank: u8
 }
 
-impl PlayerImpl for PlayerComponent {
-    fn new(player_id: ContractAddress, username: String, moves_remaining: u8, score: u32) -> Self {
-        return Self {
-            player_id: player_id,
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+/////////////////////////////// TRAITS /////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
+trait IPlayerComponent {
+    fn new(username: felt252, hand: HandComponent, deck: DeckComponent,
+        moves_remaining: u8, score: u32) -> PlayerComponent;
+}
+
+trait IHandComponent {
+    fn new(cards: Array<CardComponent>) -> HandComponent;
+    fn add(ref self: HandComponent, card: CardComponent) -> ();
+    fn use_card(ref self: HandComponent, card: CardComponent) -> Result<(), EnumTxError>;
+}
+
+trait IDeckComponent {
+    fn new(cards: Array<CardComponent>) -> DeckComponent;
+    fn use_card(ref self: DeckComponent, card: CardComponent) -> Result<(), EnumTxError>;
+}
+
+trait ICardComponent {
+    fn new(name: felt252, description: felt252, card_category: EnumCardCategory,
+            value: u8, rank: u8) -> CardComponent;
+    fn compare_rank_with(ref self: CardComponent, field: @CardComponent) -> EnumCardCompare;
+
+}
+
+impl PlayerComponentImpl of IPlayerComponent {
+    fn new(username: felt252, hand: HandComponent, deck: DeckComponent,
+        moves_remaining: u8, score: u32) -> PlayerComponent {
+        return PlayerComponent {
             username: username,
+            hand: hand,
+            deck: deck,
             moves_remaining: 3,
             score: score,
         };
     }
 }
 
-impl HandComponentImpl for HandComponent {
-    fn new(cards: Array<Card>) -> Self {
-        return Self {
+impl HandComponentImpl of IHandComponent {
+    fn new(cards: Array<CardComponent>) -> HandComponent {
+        return HandComponent {
             cards: cards,
+        };
+    }
+
+    fn add(ref self: HandComponent, card: CardComponent) -> () {
+        self.cards.append(card);
+        return ();
+    }
+
+    fn use_card(ref self: HandComponent, card: CardComponent) -> Result<(), EnumTxError> {
+        if self.cards.is_empty() {
+            return Result::Err(EnumTxError::CardNotFound);
         }
+
+        let mut index = 0;
+        let mut card_index = 0;
+        let mut card_found = false;
+        let mut migrated_array = ArrayTrait::<CardComponent>::new();
+
+        while index < self.cards.len() {
+            if let Option::Some(current_card) = self.cards.pop_front() {
+                migrated_array.append(current_card);
+                continue;
+            }
+
+            card_index = index;
+            index += 1;
+        };
+
+        if !card_found {
+            return Result::Err(EnumTxError::CardNotFound);
+        }
+
+        self.cards = migrated_array;
+
+        return Result::Ok(());
     }
 }
 
-impl DeckComponentImpl for DeckComponent {
-    fn new(cards: Array<Card>) -> Self {
-        return Self {
+impl DeckComponentImpl of IDeckComponent {
+    fn new(cards: Array<CardComponent>) -> DeckComponent {
+        return DeckComponent {
             cards: cards
+        };
+    }
+
+    fn use_card(ref self: DeckComponent, card: CardComponent) -> Result<(), EnumTxError> {
+        if self.cards.is_empty() {
+            return Result::Err(EnumTxError::CardNotFound);
         }
+
+        let mut index = 0;
+        let mut card_index = 0;
+        let mut card_found = false;
+        let mut migrated_array = ArrayTrait::<CardComponent>::new();
+
+        while index < self.cards.len() {
+            if let Option::Some(current_card) = self.cards.pop_front() {
+                migrated_array.append(current_card);
+                continue;
+            }
+
+            card_index = index;
+            index += 1;
+        };
+
+        if !card_found {
+            return Result::Err(EnumTxError::CardNotFound);
+        }
+
+        self.cards = migrated_array;
+
+        return Result::Ok(());
     }
 }
 
-impl CardComponentImpl for CardComponent {
-    fn new(name: String, description: String, card_category: EnumCardCategory,
-        value: u8, rank: u8) -> Self {
-        return Self {
+impl CardComponentImpl of ICardComponent {
+    fn new(name: felt252, description: felt252, card_category: EnumCardCategory,
+        value: u8, rank: u8) -> CardComponent {
+        return CardComponent {
             name: name,
             description: description,
             card_category: card_category,
@@ -73,41 +179,55 @@ impl CardComponentImpl for CardComponent {
         };
     }
     
-    fn compare_rank_with(self: ref CardComponent, field: @CardComponent) -> EnumCardCompare {
-        if self.rank > field.rank {
-            return EnumCardCompare::Bigger();
+    fn compare_rank_with(ref self: CardComponent, field: @CardComponent) -> EnumCardCompare {
+        if self.rank > *field.rank {
+            return EnumCardCompare::Bigger;
         }
         
-        if self.rank < field.rank {
-            return EnumCardCompare::Smaller();
+        if self.rank < *field.rank {
+            return EnumCardCompare::Smaller;
         }
         
-        return EnumCardCompare::Equal();
+        return EnumCardCompare::Equal;
     }
 }
 
-#[derive(Copy, Drop, Serde, ParitalEq, Introspect)]
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+/////////////////////////////// ENUMS /////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+
+#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
 enum EnumTxError {
     IncorrectTransaction: (),
     InvalidMove: (),
+    CardNotFound: (),
     UnknownPlayer: (),
     LobbyFull: (),
     LobbyDoesNotExist: ()
 }
 
-#[derive(Copy, Drop, Serde, ParitalEq, Introspect)]
+#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
 enum EnumCardCompare {
     Smaller: (),
     Equal: (),
     Bigger: ()
 }
 
-#[derive(Copy, Drop, Serde, ParitalEq, Introspect)]
+#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
 enum EnumCardCategory {
     Cash: (),
     Property: (),
     Special: ()
 }
+
+
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+/////////////////////////////// TESTS /////////////////////////////////
+///////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
 mod tests {
