@@ -4,7 +4,7 @@ version = 1
 [[package]]
 name = "dojo"
 version = "1.0.0-alpha.4"
-source = "git+https://github.com/dojoengine/dojo?tag=v1.0.0-alpha.9#e42ce0c220a59d75c5b08e87a81de12cfdc27a55"
+source = "git+https://github.com/dojoengine/dojo?tag=v1.0.0-alpha.12#b391948911356cbf8a91daa93314809c87411098"
 dependencies = [
  "dojo_plugin",
 ]
@@ -15,7 +15,7 @@ version = "1.0.0-alpha.4"
 source = "git+https://github.com/dojoengine/dojo?rev=f15def33#f15def330c0d099e79351d11c197f63e8cc1ff36"
 
 [[package]]
-name = "dojo_starter"
+name = "zktt"
 version = "0.1.0"
 dependencies = [
  "dojo",

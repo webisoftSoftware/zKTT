@@ -6,44 +6,52 @@ use starknet::ContractAddress;
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-#[derive(Drop, Serde, Introspect)]
+#[derive(Drop, Serde)]
 #[dojo::model]
 struct PlayerComponent {
     #[key]
-    pub username: felt252,
-    pub hand: HandComponent,
-    pub deck: DeckComponent,
-    pub moves_remaining: u8,
-    pub score: u32,
-}
-
-#[derive(Drop, Serde, Introspect)]
-#[dojo::model]
-struct DealerComponent {
+    ent_username: felt252,
     #[key]
-    pub dealer_id: ContractAddress,
-    pub deck: DeckComponent,
+    ent_deck: Array<CardComponent>,
+    #[key]
+    ent_hand: Array<CardComponent>,
+    pub moves_remaining: u8,
+    pub score: u32
 }
 
-#[derive(Drop, Serde, Introspect)]
-pub struct HandComponent {
-    pub cards: Array<CardComponent>
-}
-
-#[derive(Drop, Serde, Introspect)]
-pub struct DeckComponent {
-    pub cards: Array<CardComponent>
-}
-
-#[derive(Copy, Drop, Serde, Introspect)]
+#[derive(Drop, Serde)]
 #[dojo::model]
 pub struct CardComponent {
     #[key]
-    pub name: felt252,
-    pub description: felt252,
-    pub card_category: EnumCardCategory,
-    pub value: u8,
-    pub rank: u8
+    pub ent_category: EnumCardCategory,
+    pub total_left: u8
+}
+
+#[derive(Drop, Serde)]
+#[dojo::model]
+pub struct BlockchainComponent {
+    #[key]
+    pub ent_name: felt252,
+    pub value: u256
+}
+
+#[derive(Drop, Serde)]
+#[dojo::model]
+pub struct GasFeeComponent {
+    #[key]
+    pub ent_name: felt252,
+    pub first_blockchains_affected: BlockchainComponent,
+    pub second_blockchain_affected: Option<BlockchainComponent>,
+    pub value: u256,
+    pub fees: u256
+}
+
+#[derive(Drop, Serde)]
+#[dojo::model]
+pub struct SpecialComponent {
+    #[key]
+    pub ent_name: felt252,
+    pub value: u256
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -52,57 +60,47 @@ pub struct CardComponent {
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-trait IPlayerComponent {
-    fn new(username: felt252, hand: HandComponent, deck: DeckComponent,
+trait IPlayer {
+    fn new(username: felt252, deck: Array<CardComponent>, hand: Array<CardComponent>,
         moves_remaining: u8, score: u32) -> PlayerComponent;
+    fn add_to_hand(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError>;
+    fn use_card(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError>;
 }
 
-trait IHandComponent {
-    fn new(cards: Array<CardComponent>) -> HandComponent;
-    fn add(ref self: HandComponent, card: CardComponent) -> ();
-    fn use_card(ref self: HandComponent, card: CardComponent) -> Result<(), EnumTxError>;
+trait ICard {
+    fn new(category: EnumCardCategory, total_left: u8) -> CardComponent;
+    fn is_equal(self: @CardComponent, other: @CardComponent) -> bool;
 }
 
-trait IDeckComponent {
-    fn new(cards: Array<CardComponent>) -> DeckComponent;
-    fn use_card(ref self: DeckComponent, card: CardComponent) -> Result<(), EnumTxError>;
+trait IAction {
+    fn apply_action(self: @EnumCardCategory) -> Result<(), EnumMoveError>;
 }
 
-trait ICardComponent {
-    fn new(name: felt252, description: felt252, card_category: EnumCardCategory,
-            value: u8, rank: u8) -> CardComponent;
-    fn compare_rank_with(ref self: CardComponent, field: @CardComponent) -> EnumCardCompare;
-
-}
-
-impl PlayerComponentImpl of IPlayerComponent {
-    fn new(username: felt252, hand: HandComponent, deck: DeckComponent,
-        moves_remaining: u8, score: u32) -> PlayerComponent {
+impl PlayerImpl of IPlayer {
+    fn new(username: felt252, deck: Array<CardComponent>, hand: Array<CardComponent>,
+            moves_remaining: u8, score: u32) -> PlayerComponent {
         return PlayerComponent {
-            username: username,
-            hand: hand,
-            deck: deck,
-            moves_remaining: 3,
+            ent_username: username,
+            ent_deck: deck,
+            ent_hand: hand,
+            moves_remaining: moves_remaining,
             score: score,
         };
     }
-}
 
-impl HandComponentImpl of IHandComponent {
-    fn new(cards: Array<CardComponent>) -> HandComponent {
-        return HandComponent {
-            cards: cards,
-        };
+    fn add_to_hand(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError> {
+        if self.ent_hand.len() > 7 && self.moves_remaining == 1 {
+            return Result::Err(EnumMoveError::TooManyCardsHeld);
+        }
+
+        self.ent_hand.append(card);
+        self.moves_remaining -= 1;
+        return Result::Ok(());
     }
 
-    fn add(ref self: HandComponent, card: CardComponent) -> () {
-        self.cards.append(card);
-        return ();
-    }
-
-    fn use_card(ref self: HandComponent, card: CardComponent) -> Result<(), EnumTxError> {
-        if self.cards.is_empty() {
-            return Result::Err(EnumTxError::CardNotFound);
+    fn use_card(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError> {
+        if self.ent_hand.is_empty() {
+            return Result::Err(EnumMoveError::CardNotFound);
         }
 
         let mut index = 0;
@@ -110,8 +108,8 @@ impl HandComponentImpl of IHandComponent {
         let mut card_found = false;
         let mut migrated_array = ArrayTrait::<CardComponent>::new();
 
-        while index < self.cards.len() {
-            if let Option::Some(current_card) = self.cards.pop_front() {
+        while index < self.ent_hand.len() {
+            if let Option::Some(current_card) = self.ent_hand.pop_front() {
                 migrated_array.append(current_card);
                 continue;
             }
@@ -121,74 +119,48 @@ impl HandComponentImpl of IHandComponent {
         };
 
         if !card_found {
-            return Result::Err(EnumTxError::CardNotFound);
+            return Result::Err(EnumMoveError::CardNotFound);
         }
 
-        self.cards = migrated_array;
-
+        self.ent_hand = migrated_array;
+        self.moves_remaining -= 1;
         return Result::Ok(());
     }
 }
 
-impl DeckComponentImpl of IDeckComponent {
-    fn new(cards: Array<CardComponent>) -> DeckComponent {
-        return DeckComponent {
-            cards: cards
-        };
-    }
-
-    fn use_card(ref self: DeckComponent, card: CardComponent) -> Result<(), EnumTxError> {
-        if self.cards.is_empty() {
-            return Result::Err(EnumTxError::CardNotFound);
-        }
-
-        let mut index = 0;
-        let mut card_index = 0;
-        let mut card_found = false;
-        let mut migrated_array = ArrayTrait::<CardComponent>::new();
-
-        while index < self.cards.len() {
-            if let Option::Some(current_card) = self.cards.pop_front() {
-                migrated_array.append(current_card);
-                continue;
-            }
-
-            card_index = index;
-            index += 1;
-        };
-
-        if !card_found {
-            return Result::Err(EnumTxError::CardNotFound);
-        }
-
-        self.cards = migrated_array;
-
-        return Result::Ok(());
-    }
-}
-
-impl CardComponentImpl of ICardComponent {
-    fn new(name: felt252, description: felt252, card_category: EnumCardCategory,
-        value: u8, rank: u8) -> CardComponent {
+impl CardImpl of ICard {
+    fn new(category: EnumCardCategory, total_left: u8) -> CardComponent {
         return CardComponent {
-            name: name,
-            description: description,
-            card_category: card_category,
-            value: value,
-            rank: rank
+            ent_category: category,
+            total_left: total_left
         };
     }
-    
-    fn compare_rank_with(ref self: CardComponent, field: @CardComponent) -> EnumCardCompare {
-        if self.rank > *field.rank {
-            return EnumCardCompare::Bigger;
-        }
-        
-        if self.rank < *field.rank {
-            return EnumCardCompare::Smaller;
-        }
-        
-        return EnumCardCompare::Equal;
+
+    fn is_equal(self: @CardComponent, other: @CardComponent) -> bool {
+        return match (self.ent_category, other.ent_category) {
+            (EnumCardCategory::Eth(our_value), EnumCardCategory::Eth(their_value)) => our_value == their_value,
+            (EnumCardCategory::GasFee(our_component), EnumCardCategory::GasFee(their_component)) =>
+                our_component.ent_name == their_component.ent_name && our_component.value == their_component.value,
+            (EnumCardCategory::Blockchain(our_component), EnumCardCategory::Blockchain(their_component)) =>
+                our_component.ent_name == their_component.ent_name && our_component.value == their_component.value,
+            (EnumCardCategory::Special(our_component), EnumCardCategory::Special(their_component)) =>
+                our_component.ent_name == their_component.ent_name && our_component.value == their_component.value,
+            _ => false
+        };
+    }
+}
+
+impl IActionImpl of IAction {
+    fn apply_action(self: @EnumCardCategory) -> Result<(), EnumMoveError> {
+        match self {
+            EnumCardCategory::Eth(_value) => {},
+            EnumCardCategory::GasFee(_component) => {},
+            EnumCardCategory::Blockchain(_component) => {},
+            EnumCardCategory::Special(_component) => {},
+            _ => { return Result::Err(EnumMoveError::InvalidCardCategory); }
+        };
+
+        return Result::Ok(());
     }
 }
 
@@ -199,27 +171,18 @@ impl CardComponentImpl of ICardComponent {
 ///////////////////////////////////////////////////////////////////////
 
 #[derive(Copy, Drop, Serde, PartialEq, Introspect)]
-enum EnumTxError {
-    IncorrectTransaction: (),
-    InvalidMove: (),
+enum EnumMoveError {
+    TooManyCardsHeld: (),
     CardNotFound: (),
-    UnknownPlayer: (),
-    LobbyFull: (),
-    LobbyDoesNotExist: ()
+    InvalidCardCategory: ()
 }
 
-#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
-enum EnumCardCompare {
-    Smaller: (),
-    Equal: (),
-    Bigger: ()
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
+#[derive(Drop, Serde, Introspect)]
 enum EnumCardCategory {
-    Cash: (),
-    Property: (),
-    Special: ()
+    Eth: u256,
+    GasFee: GasFeeComponent,
+    Blockchain: BlockchainComponent,
+    Special: SpecialComponent
 }
 
 
@@ -230,26 +193,4 @@ enum EnumCardCategory {
 ///////////////////////////////////////////////////////////////////////
 
 #[cfg(test)]
-mod tests {
-    use super::{CardComponent, Card, PlayerComponent, EnumCardCategory};
-
-    #[test]
-    fn test_is_equal() {
-        let player = PlayerComponent::new("0xffffffffff", "nami2301", 3, 0);
-        let card1 = CardComponent::new(player,
-            name: "1M".to_string(),
-            description: "1 Million Dollars".to_string(),
-            card_type: EnumCardCategory::Cash,
-            value: 1,
-            rank: 0);
-        
-        let card2 = CardComponent::new(player,
-            name: "2M".to_string(),
-            description: "2 Million Dollars".to_string(),
-            card_type: EnumCardCategory::Cash,
-            value: 2,
-            rank: 0);
-        
-        assert(card1.compare_rank_with(card2), 'Ranks should be equal');
-    }
-}
+mod tests {}
