@@ -1,7 +1,5 @@
 mod systems {
-    mod play;
-    mod connect;
-    mod disconnect;
+    mod game;
 }
 
 mod models;
