@@ -1,39 +1,24 @@
 use zktt::models::{CardComponent, PlayerComponent, EnumCardCategory, EnumGameState, EnumMoveError};
 use starknet::ContractAddress;
 
-
-#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
-enum EnumTxError {
-    InvalidMove: EnumMoveError,
-    GameAlreadyStarted: (),
-    GameNotStarted: (),
-    NoPlayersToDistribute: (),
-    InvalidPlayer: ()
-}
-
-impl EnumMoveErrorIntoEnumTxError of Into<EnumMoveError, EnumTxError> {
-    fn into(self: EnumMoveError) -> EnumTxError {
-        return EnumTxError::InvalidMove(self);
-    }
-}
-
 #[dojo::interface]
 trait IGame {
-    fn start(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
-    fn join(ref world: IWorldDispatcher, lobby: felt252, username: ByteArray) -> Result<(), EnumTxError>;
-    fn draw(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
-    fn play(ref world: IWorldDispatcher, lobby: felt252, card: CardComponent) -> Result<(), EnumTxError>;
-    fn end_turn(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
-    fn leave(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
-    fn end(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
+    fn join(ref world: IWorldDispatcher, username: ByteArray) -> ();
+    fn start(ref world: IWorldDispatcher) -> ();
+    fn draw(ref world: IWorldDispatcher) -> ();
+    fn play(ref world: IWorldDispatcher, card: CardComponent) -> ();
+    fn end_turn(ref world: IWorldDispatcher) -> ();
+    fn leave(ref world: IWorldDispatcher) -> ();
+    fn end(ref world: IWorldDispatcher) -> ();
 }
 
 #[dojo::contract]
 mod game {
-    use super::{IGame, EnumTxError};
-    use starknet::{ContractAddress, get_caller_address};
-    use zktt::models::{GameComponent, CardComponent, CardPileComponent, PlayerComponent,
-     EnumGameState, EnumMoveError, EnumCardCategory, IGameComponent, IPlayer, ICard};
+    use super::{IGame};
+    use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
+    use zktt::models::{GameComponent, CardComponent, DeckComponent, DealerComponent,
+     HandComponent, PlayerComponent, EnumGameState, EnumMoveError, EnumCardCategory, IGameComponent,
+      IPlayer, ICard, IHand, IAsset};
 
     ////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////
@@ -43,110 +28,104 @@ mod game {
 
     #[abi(embed_v0)]
     impl IGameImpl of IGame<ContractState> {
-        fn start(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
-            let game_lobby = get!(world, (0), (GameComponent));
-            // Check if game has not started.
-            assert!(game_lobby.state == EnumGameState::WaitingForPlayers, "Game has already started");
-            // Check if we have enough players to start a new game.
-            assert!(game_lobby.players.len() >= 2, "Missing at least a player before starting");
+        fn join(ref world: IWorldDispatcher, username: ByteArray) -> () {
+            let mut game_component = get!(world, (world.contract_address), (GameComponent));
+            assert!(game_component.state == EnumGameState::WaitingForPlayers, "Game has already started");
+            assert!(game_component.players.len() < 5, "Lobby already full");
 
-            let mut game_component = get!(world, (lobby), (GameComponent));
-            game_component.state = EnumGameState::Started;
+            game_component.players.append(get_caller_address());
             set!(world, (game_component));
 
-            let mut new_player: PlayerComponent = IPlayer::new(get_caller_address(), "Nami",
-             array![], array![], array![]);
-            let mut players = array![new_player];
+            let new_player: PlayerComponent = IPlayer::new(get_caller_address(), username);
+            set!(world, (new_player));
 
-            return match distribute_cards(players) {
-                Result::Ok(mut updated_players) => {
-                    // Update players in world.
-                    while !updated_players.is_empty() {
-                        if let Option::Some(player) = updated_players.pop_front() {
-                            set!(world, (player));
-                        }
-                    };
-                    return Result::Ok(());
-                },
-                Result::Err(err) => {
-                    return Result::Err(err);
-                }
-            };
+            return ();
         }
 
-        fn join(ref world: IWorldDispatcher, lobby: felt252, username: ByteArray) -> Result<(), EnumTxError> {
-            let mut game_lobby = get!(world, (lobby), (GameComponent));
+        fn start(ref world: IWorldDispatcher) -> () {
+            let seed = world.contract_address;
+            let game_lobby = get!(world, (seed), (GameComponent));
+
             assert!(game_lobby.state == EnumGameState::WaitingForPlayers, "Game has already started");
-            assert!(game_lobby.players.len() < 5, "Lobby already full");
+            assert!(game_lobby.players.len() >= 2, "Missing at least a player before starting");
 
-            let mut new_player: PlayerComponent = IPlayer::new(get_caller_address(), username,
-                         array![], array![], array![]);
+            let mut game_component = get!(world, (seed), (GameComponent));
+            game_component.state = EnumGameState::Started;
 
-            game_lobby.players.append(new_player);
-            set!(world, (game_lobby));
-            return Result::Ok(());
+            let mut dealer_component = get!(world, (seed), (DealerComponent));
+            let mut cards = create_cards(generate_seed(@seed, @game_component.players));
+            set!(world, (game_component));
+
+            let mut game_component = get!(world, (seed), (GameComponent));
+            let mut world_ref = world;
+            distribute_cards(ref world_ref, game_component.players, ref cards);
+            dealer_component.cards = cards;
+            set!(world, (dealer_component));
+            return ();
         }
 
-        fn draw(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
-            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
+        fn draw(ref world: IWorldDispatcher) -> () {
+            let seed = world.contract_address;
+            assert!(get!(world, (seed), (GameComponent)).state == EnumGameState::Started,
                          "Game has not started yet");
 
-            let mut player_component = get!(world, (get_caller_address()), (PlayerComponent));
-            let card = draw_card_from_pile();
-            return match player_component.add_to_hand(card) {
-                Result::Ok(()) => {
-                    set!(world, (player_component));
-                    return Result::Ok(());
-                },
-                Result::Err(err) => {
-                    return Result::Err(err.into());
-                }
-            };
-        }
+            let (mut hand, player) = get!(world, (get_caller_address()), (HandComponent, PlayerComponent));
+            let mut pile = get!(world, (seed), DealerComponent);
+            let card_opt = draw_card_from_pile(ref pile);
 
-        fn play(ref world: IWorldDispatcher, lobby: felt252, card: CardComponent) -> Result<(), EnumTxError> {
-            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
-                         "Game has not started yet");
-
-            let player_component = get!(world, get_caller_address(), (PlayerComponent));
-            set!(world, (player_component));
-            return Result::Ok(());
-        }
-
-        fn end_turn(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
-            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
-                         "Game has not started yet");
-
-            let player_component = get!(world, get_caller_address(), (PlayerComponent));
-            set!(world, (player_component));
-            return Result::Ok(());
-        }
-
-        fn leave(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
-            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
-                         "Game has not started yet");
-
-            let player_component = get!(world, (get_caller_address()), (PlayerComponent));
-            let mut game_component = get!(world, (lobby), (GameComponent));
-
-            if let Option::Some(_) = game_component.remove_player(@player_component.username) {
-                delete!(world, (player_component));
-                set!(world, (game_component));
-                return Result::Ok(());
+            if card_opt.is_none() {
+                panic!("Deck does not have any more cards!");
             }
 
-            return Result::Err(EnumTxError::InvalidPlayer);
+            return match hand.add(card_opt.unwrap()) {
+                Result::Ok(()) => {
+                    set!(world, (hand));
+                    return ();
+                },
+                Result::Err(_) => panic!("Error adding card to hand of {0}", player.username)
+            };
         }
 
-        fn end(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
-            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
+        fn play(ref world: IWorldDispatcher, card: CardComponent) -> () {
+            assert!(get!(world, (world.contract_address), (GameComponent)).state == EnumGameState::Started,
                          "Game has not started yet");
 
-            let mut game_component = get!(world, (lobby), (GameComponent));
+            let player_component = get!(world, get_caller_address(), (PlayerComponent));
+            set!(world, (player_component));
+            return ();
+        }
+
+        fn end_turn(ref world: IWorldDispatcher) -> () {
+            assert!(get!(world, (world.contract_address), (GameComponent)).state == EnumGameState::Started,
+                         "Game has not started yet");
+
+            let player_component = get!(world, get_caller_address(), (PlayerComponent));
+            set!(world, (player_component));
+            return ();
+        }
+
+        fn leave(ref world: IWorldDispatcher) -> () {
+            let player_component = get!(world, (get_caller_address()), (PlayerComponent));
+            let mut game_component = get!(world, (world.contract_address), (GameComponent));
+
+            if let Option::Some(_) = game_component.contains_player(@player_component.ent_owner) {
+                delete!(world, (player_component));
+                set!(world, (game_component));
+                return ();
+            }
+
+            panic!("Player not Found!");
+        }
+
+        fn end(ref world: IWorldDispatcher) -> () {
+            assert!(get!(world, (world.contract_address), (GameComponent)).state == EnumGameState::Started,
+                         "Game has not started yet");
+
+            let mut game_component = get!(world, (world.contract_address), (GameComponent));
             game_component.state = EnumGameState::Ended;
 
             set!(world, (game_component));
-            return Result::Ok(());
+            return ();
         }
     }
 
@@ -156,44 +135,59 @@ mod game {
     ////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
-    fn distribute_cards(mut players: Array<PlayerComponent>) -> Result<Array<PlayerComponent>, EnumTxError> {
-        let mut index = players.len();
-        let mut new_array = ArrayTrait::<PlayerComponent>::new();
+    fn generate_seed(world_address: @ContractAddress, players: @Array<ContractAddress>) -> felt252 {
+        // TODO: Generate random ordered card components for the beginning of the game.
+        return (get_block_timestamp() * players.len().into() * 31).into();
+    }
 
-        if index == 0 {
-            return Result::Err(EnumTxError::NoPlayersToDistribute);
+    fn create_cards(seed: felt252) -> Array<CardComponent> {
+        let asset = IAsset::new(get_caller_address(), "ETH [2]", 2, 5);
+        let ton = ICard::new(get_caller_address(), EnumCardCategory::Asset(asset));
+        return array![ton];
+    }
+
+    fn distribute_cards(ref world: IWorldDispatcher, mut players: Array<ContractAddress>,
+            ref cards: Array<CardComponent>) -> () {
+        if players.is_empty() {
+            panic!("There are no players to distribute cards to!");
         }
 
-        // TODO: Generate random ordered card components for the beginning of the game.
-        let mut cards = array![];
-
+        let mut index = 0;
         let mut current_player = players.pop_front().unwrap();
-        while index != 0 {
+        return loop {
+            if index >= players.len() {
+                break ();
+            }
 
             // Cycle through players every 5 cards given.
-            if index != cards.len() && index % 5 == 0 {
+            if index != 0 && index % 5 == 0 {
                 if let Option::Some(next_player) = players.pop_front() {
-                    new_array.append(current_player);
                     current_player = next_player;
                 }
             }
 
             if let Option::Some(card) = cards.pop_front() {
-                match current_player.add_to_hand(card) {
-                    Result::Err(_err) => {
-                        // Maybe send an event.
-                        break;
+                let mut player_hand = get!(world, (current_player), (HandComponent));
+                match player_hand.add(card) {
+                    Result::Ok(()) => {
+                        set!(world, (player_hand));
                     },
-                    _ => {}
+                    Result::Err(err) => {
+                        // Maybe send an event.
+                        panic!("Error happened when adding card Error => {0}", err);
+                    }
                 };
             }
             index -= 1;
         };
-        return Result::Ok(new_array);
     }
 
-    fn draw_card_from_pile() -> CardComponent {
-        // TODO
-        return ICard::new(EnumCardCategory::Eth(1), 6);
+    fn draw_card_from_pile(ref card_pile: DealerComponent) -> Option<CardComponent> {
+        if card_pile.cards.is_empty() {
+            return Option::None;
+        }
+        let asset = IAsset::new(get_caller_address(), "ETH [1]", 1, 6);
+
+        return Option::Some(ICard::new(get_caller_address(), EnumCardCategory::Asset(asset)));
     }
 }
