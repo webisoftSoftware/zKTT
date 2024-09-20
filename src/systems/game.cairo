@@ -1,42 +1,61 @@
-use zktt::models::{CardComponent, PlayerComponent, EnumCardCategory, EnumMoveError};
+use zktt::models::{CardComponent, PlayerComponent, EnumCardCategory, EnumGameState, EnumMoveError};
 use starknet::ContractAddress;
 
 
 #[derive(Copy, Drop, Serde, PartialEq, Introspect)]
 enum EnumTxError {
+    InvalidMove: EnumMoveError,
     GameAlreadyStarted: (),
     GameNotStarted: (),
-    NoPlayersToDistribute: ()
+    NoPlayersToDistribute: (),
+    InvalidPlayer: ()
+}
+
+impl EnumMoveErrorIntoEnumTxError of Into<EnumMoveError, EnumTxError> {
+    fn into(self: EnumMoveError) -> EnumTxError {
+        return EnumTxError::InvalidMove(self);
+    }
 }
 
 #[dojo::interface]
 trait IGame {
-    fn new_game(ref world: IWorldDispatcher) -> Result<(), EnumTxError>;
-    fn draw(ref world: IWorldDispatcher) -> Result<(), EnumMoveError>;
-    fn play(ref world: IWorldDispatcher, card: CardComponent) -> Result<(), EnumMoveError>;
-    fn end_turn(ref world: IWorldDispatcher) -> Result<(), EnumMoveError>;
-    fn end_game(ref world: IWorldDispatcher) -> Result<(), EnumTxError>;
+    fn start(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
+    fn join(ref world: IWorldDispatcher, lobby: felt252, username: ByteArray) -> Result<(), EnumTxError>;
+    fn draw(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
+    fn play(ref world: IWorldDispatcher, lobby: felt252, card: CardComponent) -> Result<(), EnumTxError>;
+    fn end_turn(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
+    fn leave(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
+    fn end(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError>;
 }
 
 #[dojo::contract]
 mod game {
     use super::{IGame, EnumTxError};
     use starknet::{ContractAddress, get_caller_address};
-    use zktt::models::{CardComponent, PlayerComponent, EnumMoveError, IPlayer, ICard, EnumCardCategory};
+    use zktt::models::{GameComponent, CardComponent, CardPileComponent, PlayerComponent,
+     EnumGameState, EnumMoveError, EnumCardCategory, IGameComponent, IPlayer, ICard};
 
-    #[derive(Drop, Serde)]
-    #[dojo::model]
-    #[dojo::event]
-    struct HasWon {
-        #[key]
-        winner: PlayerComponent,
-        score: u32
-    }
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////// PUBLIC /////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
 
     #[abi(embed_v0)]
     impl IGameImpl of IGame<ContractState> {
-        fn new_game(ref world: IWorldDispatcher) -> Result<(), EnumTxError> {
-            let mut new_player = IPlayer::new('nami2301', array![], array![], 3, 0);
+        fn start(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
+            let game_lobby = get!(world, (0), (GameComponent));
+            // Check if game has not started.
+            assert!(game_lobby.state == EnumGameState::WaitingForPlayers, "Game has already started");
+            // Check if we have enough players to start a new game.
+            assert!(game_lobby.players.len() >= 2, "Missing at least a player before starting");
+
+            let mut game_component = get!(world, (lobby), (GameComponent));
+            game_component.state = EnumGameState::Started;
+            set!(world, (game_component));
+
+            let mut new_player: PlayerComponent = IPlayer::new(get_caller_address(), "Nami",
+             array![], array![], array![]);
             let mut players = array![new_player];
 
             return match distribute_cards(players) {
@@ -55,39 +74,88 @@ mod game {
             };
         }
 
-        fn draw(ref world: IWorldDispatcher) -> Result<(), EnumMoveError> {
-            let mut player_component = get!(world, get_caller_address(), (PlayerComponent));
-            let card = draw_random_card();
-            match player_component.add_to_hand(card) {
-                Result::Err(err) => {
-                    return Result::Err(err);
+        fn join(ref world: IWorldDispatcher, lobby: felt252, username: ByteArray) -> Result<(), EnumTxError> {
+            let mut game_lobby = get!(world, (lobby), (GameComponent));
+            assert!(game_lobby.state == EnumGameState::WaitingForPlayers, "Game has already started");
+            assert!(game_lobby.players.len() < 5, "Lobby already full");
+
+            let mut new_player: PlayerComponent = IPlayer::new(get_caller_address(), username,
+                         array![], array![], array![]);
+
+            game_lobby.players.append(new_player);
+            set!(world, (game_lobby));
+            return Result::Ok(());
+        }
+
+        fn draw(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
+            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
+                         "Game has not started yet");
+
+            let mut player_component = get!(world, (get_caller_address()), (PlayerComponent));
+            let card = draw_card_from_pile();
+            return match player_component.add_to_hand(card) {
+                Result::Ok(()) => {
+                    set!(world, (player_component));
+                    return Result::Ok(());
                 },
-                _ => {}
+                Result::Err(err) => {
+                    return Result::Err(err.into());
+                }
+            };
+        }
+
+        fn play(ref world: IWorldDispatcher, lobby: felt252, card: CardComponent) -> Result<(), EnumTxError> {
+            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
+                         "Game has not started yet");
+
+            let player_component = get!(world, get_caller_address(), (PlayerComponent));
+            set!(world, (player_component));
+            return Result::Ok(());
+        }
+
+        fn end_turn(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
+            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
+                         "Game has not started yet");
+
+            let player_component = get!(world, get_caller_address(), (PlayerComponent));
+            set!(world, (player_component));
+            return Result::Ok(());
+        }
+
+        fn leave(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
+            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
+                         "Game has not started yet");
+
+            let player_component = get!(world, (get_caller_address()), (PlayerComponent));
+            let mut game_component = get!(world, (lobby), (GameComponent));
+
+            if let Option::Some(_) = game_component.remove_player(@player_component.username) {
+                delete!(world, (player_component));
+                set!(world, (game_component));
+                return Result::Ok(());
             }
-            set!(world, (player_component));
-            return Result::Ok(());
+
+            return Result::Err(EnumTxError::InvalidPlayer);
         }
 
-        fn play(ref world: IWorldDispatcher, card: CardComponent) -> Result<(), EnumMoveError> {
-            let player_component = get!(world, get_caller_address(), (PlayerComponent));
-            set!(world, (player_component));
-            return Result::Ok(());
-        }
+        fn end(ref world: IWorldDispatcher, lobby: felt252) -> Result<(), EnumTxError> {
+            assert!(get!(world, (lobby), (GameComponent)).state == EnumGameState::Started,
+                         "Game has not started yet");
 
-        fn end_turn(ref world: IWorldDispatcher) -> Result<(), EnumMoveError> {
-            let player_component = get!(world, get_caller_address(), (PlayerComponent));
-            set!(world, (player_component));
-            return Result::Ok(());
-        }
+            let mut game_component = get!(world, (lobby), (GameComponent));
+            game_component.state = EnumGameState::Ended;
 
-        fn end_game(ref world: IWorldDispatcher) -> Result<(), EnumTxError> {
-            let player_component = get!(world, get_caller_address(), (PlayerComponent));
-            set!(world, (player_component));
+            set!(world, (game_component));
             return Result::Ok(());
         }
     }
 
-    // Internal Functions.
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    /////////////////////////////// INTERNAL ///////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+    ////////////////////////////////////////////////////////////////////////////
+
     fn distribute_cards(mut players: Array<PlayerComponent>) -> Result<Array<PlayerComponent>, EnumTxError> {
         let mut index = players.len();
         let mut new_array = ArrayTrait::<PlayerComponent>::new();
@@ -118,13 +186,13 @@ mod game {
                     },
                     _ => {}
                 };
-                index -= 1;
             }
+            index -= 1;
         };
         return Result::Ok(new_array);
     }
 
-    fn draw_random_card() -> CardComponent {
+    fn draw_card_from_pile() -> CardComponent {
         // TODO
         return ICard::new(EnumCardCategory::Eth(1), 6);
     }

@@ -15,13 +15,15 @@ mod tests {
         // caller
         let caller = starknet::contract_address_const::<0x0>();
 
-        // models
+        // Models
         let mut models = array![game::TEST_CLASS_HASH];
 
-        // deploy world with models
-        let world = spawn_test_world(["zktt"].span(), models.span());
+        println!("{0}", game::TEST_CLASS_HASH);
 
-        // deploy systems contract
+        // Deploy world with models
+        let world = spawn_test_world(["game"].span(), models.span());
+
+        // Deploy systems contract
         let contract_address = world
             .deploy_contract('salt', game::TEST_CLASS_HASH.try_into().unwrap());
 
@@ -30,7 +32,7 @@ mod tests {
         world.grant_writer(dojo::utils::bytearray_hash(@"zktt"), contract_address);
 
         // Add a new player.
-        set!(world, (IPlayer::new('Nami2301', array![], array![], 3, 0)));
+        set!(world, (IPlayer::new("Nami2301", array![], array![], 3, 0)));
 
         // call play functions.
         let _ = game_system.draw();

@@ -1,4 +1,5 @@
 use starknet::ContractAddress;
+use core::fmt::{Display, Formatter, Error};
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
@@ -8,50 +9,184 @@ use starknet::ContractAddress;
 
 #[derive(Drop, Serde)]
 #[dojo::model]
-struct PlayerComponent {
+struct GameComponent {
     #[key]
-    ent_username: felt252,
-    #[key]
-    ent_deck: Array<CardComponent>,
-    #[key]
-    ent_hand: Array<CardComponent>,
-    pub moves_remaining: u8,
-    pub score: u32
+    pub seed: felt252,
+    pub state: EnumGameState,
+    pub players: Array<PlayerComponent>,
+    pub deck_on_board: CardPileComponent
 }
 
 #[derive(Drop, Serde)]
 #[dojo::model]
-pub struct CardComponent {
+struct CardPileComponent {
     #[key]
-    pub ent_category: EnumCardCategory,
-    pub total_left: u8
+    seed: felt252,
+    cards: Array<CardComponent>,
+}
+
+#[derive(Drop, Serde)]
+#[dojo::model]
+struct PlayerComponent {
+    #[key]
+    ent_address: ContractAddress,
+    username: ByteArray,
+    deck: Array<CardComponent>,
+    hand: Array<CardComponent>,
+    asset_groups: Array<CardComponent>,
+    moves_remaining: u8,
+    has_won: bool,
+    score: u32
+}
+
+#[derive(Drop, Serde, Introspect)]
+pub struct CardComponent {
+    category: EnumCardCategory,
+    total_left: u8
 }
 
 #[derive(Drop, Serde)]
 #[dojo::model]
 pub struct BlockchainComponent {
     #[key]
-    pub ent_name: felt252,
-    pub value: u256
+    ent_name: ByteArray,
+    value: u256
 }
 
 #[derive(Drop, Serde)]
 #[dojo::model]
 pub struct GasFeeComponent {
     #[key]
-    pub ent_name: felt252,
-    pub first_blockchains_affected: BlockchainComponent,
-    pub second_blockchain_affected: Option<BlockchainComponent>,
-    pub value: u256,
-    pub fees: u256
+    ent_name: ByteArray,
+    first_blockchain_affected: BlockchainComponent,
+    second_blockchain_affected: Option<BlockchainComponent>,
+    value: u256,
+    fees: u256
 }
 
 #[derive(Drop, Serde)]
 #[dojo::model]
 pub struct SpecialComponent {
     #[key]
-    pub ent_name: felt252,
-    pub value: u256
+    ent_name: ByteArray,
+    value: u256
+}
+
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////// DISPLAY /////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////
+
+impl PlayerDisplay of Display<PlayerComponent> {
+    fn fmt(self: @PlayerComponent, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Has won: {0}\nMoves remaining: {1}\nScore: {2}",
+         *self.has_won, *self.moves_remaining, *self.score);
+        f.buffer.append(@str);
+
+        let mut index = 0;
+        let str: ByteArray = format!("\nDeck:\n");
+        f.buffer.append(@str);
+
+        while index < self.deck.len() {
+            if let Option::Some(card) = self.deck.get(index) {
+                let str: ByteArray = format!("{0}", card.unbox());
+                f.buffer.append(@str);
+            }
+        };
+
+        let mut index = 0;
+        let str: ByteArray = format!("\nHand:\n");
+        f.buffer.append(@str);
+
+        while index < self.hand.len() {
+            if let Option::Some(card) = self.hand.get(index) {
+                let str: ByteArray = format!("{0}", card.unbox());
+                f.buffer.append(@str);
+            }
+        };
+
+        let mut index = 0;
+        let str: ByteArray = format!("\nAsset Groups:\n");
+        f.buffer.append(@str);
+
+        while index < self.asset_groups.len() {
+            if let Option::Some(card) = self.asset_groups.get(index) {
+                let str: ByteArray = format!("Asset Group {0}: {1}", index, card.unbox());
+                f.buffer.append(@str);
+            }
+        };
+
+        return Result::Ok(());
+    }
+}
+
+impl CardDisplay of Display<CardComponent> {
+    fn fmt(self: @CardComponent, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Category: {0}, Copies Left: {1}", self.category,
+         *self.total_left);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl BlockchainDisplay of Display<BlockchainComponent> {
+    fn fmt(self: @BlockchainComponent, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Name: {0}, Value: {1}", self.ent_name, *self.value);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl GasFeeDisplay of Display<GasFeeComponent> {
+    fn fmt(self: @GasFeeComponent, ref f: Formatter) -> Result<(), Error> {
+        if let Option::Some(second_bc_affected) = self.second_blockchain_affected {
+            let str: ByteArray = format!("Name: {0}, First Targeted Blockchain: {1}, Second (opt)
+                Targeted Blockchain: {2}, Value: {3}, Fees: {4}",
+                self.ent_name, self.first_blockchain_affected, second_bc_affected, *self.value,
+                *self.fees);
+            f.buffer.append(@str);
+            return Result::Ok(());
+        }
+
+        let str: ByteArray = format!("Name: {0}, First Targeted Blockchain: {1}, Value: {2}\n
+            Fees: {3}", self.ent_name, self.first_blockchain_affected, *self.value, *self.fees);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl SpecialDisplay of Display<SpecialComponent> {
+    fn fmt(self: @SpecialComponent, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Name: {0}, Value: {1}", self.ent_name, *self.value);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl CardCategoryDisplay of Display<EnumCardCategory> {
+    fn fmt(self: @EnumCardCategory, ref f: Formatter) -> Result<(), Error> {
+        match self {
+            EnumCardCategory::Eth(value) => {
+                let str: ByteArray = format!("Eth: ({value})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::GasFee(component) => {
+                let str: ByteArray = format!("GasFee: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::Blockchain(component) => {
+                let str: ByteArray = format!("Blockchain: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::Special(component) => {
+                let str: ByteArray = format!("Special: ({component})");
+                f.buffer.append(@str);
+            },
+            _ => {}
+        };
+        return Result::Ok(());
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////
@@ -60,47 +195,51 @@ pub struct SpecialComponent {
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-trait IPlayer {
-    fn new(username: felt252, deck: Array<CardComponent>, hand: Array<CardComponent>,
-        moves_remaining: u8, score: u32) -> PlayerComponent;
-    fn add_to_hand(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError>;
-    fn use_card(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError>;
+#[generate_trait]
+impl GameImpl of IGameComponent {
+    fn remove_player(ref self: GameComponent, username: @ByteArray) -> Option<PlayerComponent> {
+        // TODO: Impl function to check if the player exists and remove the player and create a new array.
+        return Option::None;
+    }
 }
 
-trait ICard {
-    fn new(category: EnumCardCategory, total_left: u8) -> CardComponent;
-    fn is_equal(self: @CardComponent, other: @CardComponent) -> bool;
-}
-
-trait IAction {
-    fn apply_action(self: @EnumCardCategory) -> Result<(), EnumMoveError>;
-}
-
+#[generate_trait]
 impl PlayerImpl of IPlayer {
-    fn new(username: felt252, deck: Array<CardComponent>, hand: Array<CardComponent>,
-            moves_remaining: u8, score: u32) -> PlayerComponent {
+    fn new(ent_address: ContractAddress, username: ByteArray, deck: Array<CardComponent>,
+         hand: Array<CardComponent>, asset_groups: Array<CardComponent>) -> PlayerComponent {
         return PlayerComponent {
-            ent_username: username,
-            ent_deck: deck,
-            ent_hand: hand,
-            moves_remaining: moves_remaining,
-            score: score,
+            ent_address: ent_address,
+            username: username,
+            deck: deck,
+            hand: hand,
+            asset_groups: asset_groups,
+            has_won: false,
+            moves_remaining: 3,
+            score: 0,
         };
     }
 
     fn add_to_hand(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError> {
-        if self.ent_hand.len() > 7 && self.moves_remaining == 1 {
+        if self.hand.len() > 7 && self.moves_remaining == 1 {
             return Result::Err(EnumMoveError::TooManyCardsHeld);
         }
 
-        self.ent_hand.append(card);
+        if self.moves_remaining == 0 {
+            return Result::Err(EnumMoveError::NotEnoughMoves);
+        }
+
+        self.hand.append(card);
         self.moves_remaining -= 1;
         return Result::Ok(());
     }
 
     fn use_card(ref self: PlayerComponent, card: CardComponent) -> Result<(), EnumMoveError> {
-        if self.ent_hand.is_empty() {
+        if self.hand.is_empty() {
             return Result::Err(EnumMoveError::CardNotFound);
+        }
+
+        if self.moves_remaining == 0 {
+            return Result::Err(EnumMoveError::NotEnoughMoves);
         }
 
         let mut index = 0;
@@ -108,8 +247,8 @@ impl PlayerImpl of IPlayer {
         let mut card_found = false;
         let mut migrated_array = ArrayTrait::<CardComponent>::new();
 
-        while index < self.ent_hand.len() {
-            if let Option::Some(current_card) = self.ent_hand.pop_front() {
+        while index < self.hand.len() {
+            if let Option::Some(current_card) = self.hand.pop_front() {
                 migrated_array.append(current_card);
                 continue;
             }
@@ -122,22 +261,23 @@ impl PlayerImpl of IPlayer {
             return Result::Err(EnumMoveError::CardNotFound);
         }
 
-        self.ent_hand = migrated_array;
+        self.hand = migrated_array;
         self.moves_remaining -= 1;
         return Result::Ok(());
     }
 }
 
+#[generate_trait]
 impl CardImpl of ICard {
     fn new(category: EnumCardCategory, total_left: u8) -> CardComponent {
         return CardComponent {
-            ent_category: category,
+            category: category,
             total_left: total_left
         };
     }
 
     fn is_equal(self: @CardComponent, other: @CardComponent) -> bool {
-        return match (self.ent_category, other.ent_category) {
+        return match (self.category, other.category) {
             (EnumCardCategory::Eth(our_value), EnumCardCategory::Eth(their_value)) => our_value == their_value,
             (EnumCardCategory::GasFee(our_component), EnumCardCategory::GasFee(their_component)) =>
                 our_component.ent_name == their_component.ent_name && our_component.value == their_component.value,
@@ -150,6 +290,7 @@ impl CardImpl of ICard {
     }
 }
 
+#[generate_trait]
 impl IActionImpl of IAction {
     fn apply_action(self: @EnumCardCategory) -> Result<(), EnumMoveError> {
         match self {
@@ -171,10 +312,18 @@ impl IActionImpl of IAction {
 ///////////////////////////////////////////////////////////////////////
 
 #[derive(Copy, Drop, Serde, PartialEq, Introspect)]
+enum EnumGameState {
+    WaitingForPlayers: (),
+    Started: (),
+    Ended: ()
+}
+
+#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
 enum EnumMoveError {
     TooManyCardsHeld: (),
     CardNotFound: (),
-    InvalidCardCategory: ()
+    InvalidCardCategory: (),
+    NotEnoughMoves: ()
 }
 
 #[derive(Drop, Serde, Introspect)]
@@ -184,13 +333,3 @@ enum EnumCardCategory {
     Blockchain: BlockchainComponent,
     Special: SpecialComponent
 }
-
-
-///////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////
-/////////////////////////////// TESTS /////////////////////////////////
-///////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////
-
-#[cfg(test)]
-mod tests {}
