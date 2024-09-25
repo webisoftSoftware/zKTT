@@ -43,6 +43,8 @@ struct AssetGroupComponent {
 struct BlockchainComponent {
     #[key]
     ent_owner: ContractAddress,
+    #[key]
+    ent_name: ByteArray,
     name: ByteArray,
     bc_type: EnumBlockchainType,
     fee: u8,
@@ -134,7 +136,8 @@ struct PlayerComponent {
     username: ByteArray,
     moves_remaining: u8,
     has_won: bool,
-    score: u32
+    score: u32,
+    state: EnumPlayerState
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -187,31 +190,6 @@ impl BlockchainDisplay of Display<BlockchainComponent> {
     }
 }
 
-impl CardCategoryDisplay of Display<EnumCardCategory> {
-    fn fmt(self: @EnumCardCategory, ref f: Formatter) -> Result<(), Error> {
-        match self {
-            EnumCardCategory::Asset(component) => {
-                let str: ByteArray = format!("Asset: ({component})");
-                f.buffer.append(@str);
-            },
-            EnumCardCategory::AssetGroup(component) => {
-                let str: ByteArray = format!("AssetGroup: ({component})");
-                f.buffer.append(@str);
-            },
-            EnumCardCategory::GasFee(component) => {
-                let str: ByteArray = format!("GasFee: ({component})");
-                f.buffer.append(@str);
-            },
-            EnumCardCategory::Blockchain(component) => {
-                let str: ByteArray = format!("Blockchain: ({component})");
-                f.buffer.append(@str);
-            },
-            _ => {}
-        };
-        return Result::Ok(());
-    }
-}
-
 impl CardDisplay of Display<CardComponent> {
     fn fmt(self: @CardComponent, ref f: Formatter) -> Result<(), Error> {
         let str: ByteArray = format!("Category: {0}", self.category);
@@ -247,6 +225,31 @@ impl EnumActionTypeDisplay of Display<EnumActionType> {
                 let str: ByteArray = format!("Stolen Asset Group: {0}", component);
                 f.buffer.append(@str);
             }
+        };
+        return Result::Ok(());
+    }
+}
+
+impl EnumCardCategoryDisplay of Display<EnumCardCategory> {
+    fn fmt(self: @EnumCardCategory, ref f: Formatter) -> Result<(), Error> {
+        match self {
+            EnumCardCategory::Asset(component) => {
+                let str: ByteArray = format!("Asset: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::AssetGroup(component) => {
+                let str: ByteArray = format!("AssetGroup: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::GasFee(component) => {
+                let str: ByteArray = format!("GasFee: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::Blockchain(component) => {
+                let str: ByteArray = format!("Blockchain: ({component})");
+                f.buffer.append(@str);
+            },
+            _ => {}
         };
         return Result::Ok(());
     }
@@ -369,18 +372,8 @@ impl PlayerDisplay of Display<PlayerComponent> {
 
 #[generate_trait]
 impl ActionImpl of IAction {
-    fn apply_action(self: @EnumActionType) -> Result<(), EnumMoveError> {
-        match self {
-             EnumActionType::DrawTwo((_card1, _card2)) => {},
-             EnumActionType::Exchange((_card1, _card2)) => {},
-             EnumActionType::GetFees(_gas_fee_component) => {},
-             EnumActionType::MajorityAttack(_majority_component) => {},
-             EnumActionType::StealBlockchain(_blockchain_component) => {},
-             EnumActionType::StealAssetGroup(_asset_group_component) => {},
-            _ => { return Result::Err(EnumMoveError::InvalidActiontype); }
-        };
-
-        return Result::Ok(());
+    fn get_type(self: @ActionComponent) -> @EnumActionType {
+        return self.action_type;
     }
 }
 
@@ -407,6 +400,17 @@ impl CardImpl of ICard {
 }
 
 #[generate_trait]
+impl DealerImpl of IDealer {
+    fn pop_card(ref self: DealerComponent) -> Option<CardComponent> {
+        if self.cards.is_empty() {
+            return Option::None;
+        }
+
+        return self.cards.pop_front();
+    }
+}
+
+#[generate_trait]
 impl GameImpl of IGameComponent {
     fn add_player(ref self: GameComponent, mut new_player: ContractAddress) -> () {
         assert!(self.contains_player(@new_player).is_none());
@@ -427,6 +431,26 @@ impl GameImpl of IGameComponent {
             }
         };
         return found;
+    }
+
+    fn remove_player(ref self: GameComponent, player: @ContractAddress) -> () {
+        if let Option::Some(index_found) = self.contains_player(player) {
+            let mut new_array = ArrayTrait::new();
+
+            let mut index = 0;
+            return loop {
+                if index >= self.players.len() {
+                    break ();
+                }
+
+                if index == index_found {
+                    continue;
+                }
+
+                new_array.append(*self.players.at(index));
+                index += 1;
+            };
+        }
     }
 }
 
@@ -451,6 +475,7 @@ impl PlayerImpl of IPlayer {
             has_won: false,
             moves_remaining: 3,
             score: 0,
+            state: EnumPlayerState::TurnEnded
         };
     }
 }
@@ -466,6 +491,12 @@ enum EnumGameState {
     WaitingForPlayers: (),
     Started: (),
     Ended: ()
+}
+
+#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
+enum EnumPlayerState {
+    TurnStarted: (),
+    TurnEnded: (),
 }
 
 #[derive(Copy, Drop, Serde, PartialEq, Introspect)]
