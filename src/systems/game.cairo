@@ -177,9 +177,32 @@ mod game {
     }
 
     fn create_assets(world_address: @ContractAddress, ref container: Array<CardComponent>) -> () {
+
+        // ASSET CARDS
+        let asset = IAsset::new(*world_address, "ETH [1]", 1, 6);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
+        container.append(ton);
+
         let asset = IAsset::new(*world_address, "ETH [2]", 2, 5);
         let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
         container.append(ton);
+
+        let asset = IAsset::new(*world_address, "ETH [3]", 3, 3);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
+        container.append(ton);
+
+        let asset = IAsset::new(*world_address, "ETH [4]", 4, 3);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
+        container.append(ton);
+
+        let asset = IAsset::new(*world_address, "ETH [5]", 5, 2);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
+        container.append(ton);
+
+        let asset = IAsset::new(*world_address, "ETH [10]", 10, 1);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
+        container.append(ton);
+        
         return ();
     }
 
