@@ -1,4 +1,4 @@
-use zktt::models::{ActionComponent, PlayerComponent, EnumCardCategory, EnumGameState, EnumMoveError};
+use zktt::models::{CardComponent, PlayerComponent, EnumCardCategory, EnumGameState, EnumMoveError};
 use starknet::ContractAddress;
 
 #[dojo::interface]
@@ -7,7 +7,7 @@ trait IGame {
     fn start(ref world: IWorldDispatcher) -> ();
     fn new_turn(ref world: IWorldDispatcher) -> ();
     fn draw(ref world: IWorldDispatcher) -> ();
-    fn play(ref world: IWorldDispatcher, action: ActionComponent) -> ();
+    fn play(ref world: IWorldDispatcher, card: CardComponent) -> ();
     fn end_turn(ref world: IWorldDispatcher) -> ();
     fn leave(ref world: IWorldDispatcher) -> ();
     fn end(ref world: IWorldDispatcher) -> ();
@@ -98,14 +98,14 @@ mod game {
             };
         }
 
-        fn play(ref world: IWorldDispatcher, action: ActionComponent) -> () {
+        fn play(ref world: IWorldDispatcher, card: CardComponent) -> () {
             assert!(get!(world, (world.contract_address), (GameComponent)).state == EnumGameState::Started,
                          "Game has not started yet");
 
             let caller = get_caller_address();
             let mut player = get!(world, get_caller_address(), (PlayerComponent));
             let mut world_cpy = world;
-            apply_action(ref world_cpy, @caller, action);
+            use_card(ref world_cpy, @caller, card);
 
             player.moves_remaining -= 1;
             set!(world, (player));
@@ -156,18 +156,26 @@ mod game {
     ////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
-    fn apply_action(ref world: IWorldDispatcher, caller: @ContractAddress, action: ActionComponent) -> () {
+    fn use_card(ref world: IWorldDispatcher, caller: @ContractAddress, card: CardComponent) -> () {
         let (mut _hand, mut _deck, mut _money) = get!(world, (*caller), (HandComponent, DeckComponent, MoneyPileComponent));
-        match action.get_type() {
-             EnumActionType::DrawTwo((_card1, _card2)) => {},
-             EnumActionType::Exchange((_card1, _card2)) => {},
-             EnumActionType::GetFees(_gas_fee_component) => {},
-             EnumActionType::MajorityAttack(_majority_component) => {},
-             EnumActionType::StealBlockchain(_blockchain_component) => {},
-             EnumActionType::StealAssetGroup(_asset_group_component) => {},
+        match card.get_category() {
+             EnumCardCategory::Action(action) => {
+                match action.get_type() {
+                     EnumActionType::Draw(_) => {},
+                     EnumActionType::Exchange((_card1, _card2)) => {},
+                     EnumActionType::Claim(_gas_fee_component) => {},
+                     EnumActionType::Deny(_majority_component) => {},
+                     EnumActionType::StealBlockchain(_blockchain_component) => {},
+                     EnumActionType::StealAssetGroup(_asset_group_component) => {}
+                 }
+             },
+             EnumCardCategory::Asset(_asset) => {},
+             EnumCardCategory::AssetGroup(_asset_group) => {},
+             EnumCardCategory::Blockchain(_blockchain) => {},
+             EnumCardCategory::GasFee(_gas_fee) => {},
             _ => { panic!("Invalid or illegal move!"); }
         };
-        set!(world, (action));
+        set!(world, (card));
         return ();
     }
 
@@ -191,6 +199,11 @@ mod game {
     }
 
     fn create_action_cards(world_address: @ContractAddress, ref container: Array<CardComponent>) -> () {
+        let action = IAction::new("Draw 2", *world_address, *world_address, EnumActionType::Draw);
+        let action_card = ICard::new(*world_address, EnumCardCategory::Action(action));
+        container.append(action_card);
+
+        return ();
     }
 
     fn shuffle(ref world: IWorldDispatcher) -> () {

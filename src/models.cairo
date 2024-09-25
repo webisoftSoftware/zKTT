@@ -14,9 +14,7 @@ struct ActionComponent {
     ent_name: ByteArray,
     from: ContractAddress,
     to: ContractAddress,
-    action_type: EnumActionType,
-    card_value: u8,
-    copies_left: u8
+    action_type: EnumActionType
 }
 
 #[derive(Drop, Serde)]
@@ -147,8 +145,7 @@ struct PlayerComponent {
 
 impl ActionDisplay of Display<ActionComponent> {
     fn fmt(self: @ActionComponent, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Action Type: {0}, Value: {1}, Copies Left {2}",
-         self.action_type, *self.card_value, *self.copies_left);
+        let str: ByteArray = format!("Action Type: {0}", self.action_type);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -200,19 +197,19 @@ impl CardDisplay of Display<CardComponent> {
 impl EnumActionTypeDisplay of Display<EnumActionType> {
     fn fmt(self: @EnumActionType, ref f: Formatter) -> Result<(), Error> {
         match self {
-            EnumActionType::DrawTwo((card1, card2)) => {
-                let str: ByteArray = format!("Cards Drawn: {0}, {1}", card1, card2);
+            EnumActionType::Draw(_) => {
+                let str: ByteArray = format!("Draw two cards from the deck");
                 f.buffer.append(@str);
             },
             EnumActionType::Exchange((blockchain1, blockchain2)) => {
                 let str: ByteArray = format!("Exchanged Cards: {0} <-> {1}", blockchain1, blockchain2);
                 f.buffer.append(@str);
             },
-            EnumActionType::GetFees(component) => {
+            EnumActionType::Claim(component) => {
                 let str: ByteArray = format!("Gas Fees: {0}", component);
                 f.buffer.append(@str);
             },
-            EnumActionType::MajorityAttack(component) => {
+            EnumActionType::Deny(component) => {
                 let str: ByteArray = format!("51% Attack: {0}", component);
                 f.buffer.append(@str);
             },
@@ -232,6 +229,10 @@ impl EnumActionTypeDisplay of Display<EnumActionType> {
 impl EnumCardCategoryDisplay of Display<EnumCardCategory> {
     fn fmt(self: @EnumCardCategory, ref f: Formatter) -> Result<(), Error> {
         match self {
+            EnumCardCategory::Action(component) => {
+                let str: ByteArray = format!("Asset: ({component})");
+                f.buffer.append(@str);
+            },
             EnumCardCategory::Asset(component) => {
                 let str: ByteArray = format!("Asset: ({component})");
                 f.buffer.append(@str);
@@ -371,6 +372,15 @@ impl PlayerDisplay of Display<PlayerComponent> {
 
 #[generate_trait]
 impl ActionImpl of IAction {
+    fn new(name: ByteArray, from: ContractAddress, to: ContractAddress, action_type: EnumActionType) -> ActionComponent {
+        return ActionComponent {
+            ent_name: name,
+            from: from,
+            to: to,
+            action_type: action_type
+        };
+    }
+
     fn get_type(self: @ActionComponent) -> @EnumActionType {
         return self.action_type;
     }
@@ -409,6 +419,10 @@ impl CardImpl of ICard {
             ent_owner: owner,
             category: category
         };
+    }
+
+    fn get_category(self: @CardComponent) -> @EnumCardCategory {
+        return self.category;
     }
 }
 
@@ -522,6 +536,7 @@ enum EnumMoveError {
 
 #[derive(Drop, Serde, Introspect)]
 enum EnumCardCategory {
+    Action: ActionComponent,
     Asset: AssetComponent,
     AssetGroup: AssetGroupComponent,
     Blockchain: BlockchainComponent,
@@ -544,10 +559,10 @@ enum EnumBlockchainType {
 
 #[derive(Drop, Serde, Introspect)]
 enum EnumActionType {
-    DrawTwo: (CardComponent, CardComponent), // Draw two additional cards.
-    Exchange: (BlockchainComponent, BlockchainComponent),  // Swap a blockchain with another player.
-    GetFees: GasFeeComponent,  // Make other player(s) pay you a fee.
-    MajorityAttack: MajorityAttackComponent,  // Deny and avoid performing the action imposed.
-    StealBlockchain: BlockchainComponent,  // Steal a signle blockchain from a player's deck.
-    StealAssetGroup: AssetGroupComponent,  // Steal Asset Group from another player.
+    Draw: (), // Draw two additional cards.
+    Exchange: (Option<BlockchainComponent>, Option<BlockchainComponent>),  // Swap a blockchain with another player.
+    Claim: Option<GasFeeComponent>,  // Make other player(s) pay you a fee.
+    Deny: MajorityAttackComponent,  // Deny and avoid performing the action imposed.
+    StealBlockchain: Option<BlockchainComponent>,  // Steal a single blockchain from a player's deck.
+    StealAssetGroup: Option<AssetGroupComponent>,  // Steal Asset Group from another player.
 }
