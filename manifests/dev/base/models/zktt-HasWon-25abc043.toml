@@ -1,0 +1,16 @@
+kind = "DojoModel"
+class_hash = "0x7c6f2c328ec40d180c28cd8fb4a8bdb2520e780f93049b64780dbb88ab61538"
+original_class_hash = "0x7c6f2c328ec40d180c28cd8fb4a8bdb2520e780f93049b64780dbb88ab61538"
+abi = "manifests/dev/base/abis/models/zktt-HasWon-25abc043.json"
+tag = "zktt-HasWon"
+manifest_name = "zktt-HasWon-25abc043"
+
+[[members]]
+name = "winner"
+type = "PlayerComponent"
+key = true
+
+[[members]]
+name = "score"
+type = "u32"
+key = false

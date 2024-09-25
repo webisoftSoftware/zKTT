@@ -1,0 +1,16 @@
+kind = "DojoModel"
+class_hash = "0x16f04d9164c47c9a3497f383050235e72b8542b99360c99704cc6a55183df4f"
+original_class_hash = "0x16f04d9164c47c9a3497f383050235e72b8542b99360c99704cc6a55183df4f"
+abi = "manifests/dev/base/abis/models/zktt-DealerComponent-43b3243f.json"
+tag = "zktt-DealerComponent"
+manifest_name = "zktt-DealerComponent-43b3243f"
+
+[[members]]
+name = "dealer_id"
+type = "ContractAddress"
+key = true
+
+[[members]]
+name = "deck"
+type = "DeckComponent"
+key = false

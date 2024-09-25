@@ -1,0 +1,16 @@
+kind = "DojoModel"
+class_hash = "0x4d0d129767c7c444b9761612e623dbb36dd4fcd1630a6748c237033527572f6"
+original_class_hash = "0x4d0d129767c7c444b9761612e623dbb36dd4fcd1630a6748c237033527572f6"
+abi = "manifests/dev/base/abis/models/zktt-CardDrew-3b6c7a63.json"
+tag = "zktt-CardDrew"
+manifest_name = "zktt-CardDrew-3b6c7a63"
+
+[[members]]
+name = "from"
+type = "PlayerComponent"
+key = true
+
+[[members]]
+name = "card"
+type = "CardComponent"
+key = false

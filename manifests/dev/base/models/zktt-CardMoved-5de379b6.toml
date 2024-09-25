@@ -1,0 +1,21 @@
+kind = "DojoModel"
+class_hash = "0x10fcba08c84108877b1337cd7e1a90ed644e039bd157d83c326e385d32b5388"
+original_class_hash = "0x10fcba08c84108877b1337cd7e1a90ed644e039bd157d83c326e385d32b5388"
+abi = "manifests/dev/base/abis/models/zktt-CardMoved-5de379b6.json"
+tag = "zktt-CardMoved"
+manifest_name = "zktt-CardMoved-5de379b6"
+
+[[members]]
+name = "from"
+type = "PlayerComponent"
+key = true
+
+[[members]]
+name = "to"
+type = "PlayerComponent"
+key = true
+
+[[members]]
+name = "card"
+type = "CardComponent"
+key = false

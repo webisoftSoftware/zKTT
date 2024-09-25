@@ -1,0 +1,11 @@
+kind = "DojoContract"
+class_hash = "0x29116e2d85b5d60c6e16e195de8f916cd3adf66d0612299db38c93ef5e3837"
+original_class_hash = "0x29116e2d85b5d60c6e16e195de8f916cd3adf66d0612299db38c93ef5e3837"
+base_class_hash = "0x0"
+abi = "manifests/dev/base/abis/contracts/zktt-play-540e04f1.json"
+reads = []
+writes = []
+init_calldata = []
+tag = "zktt-play"
+systems = []
+manifest_name = "zktt-play-540e04f1"

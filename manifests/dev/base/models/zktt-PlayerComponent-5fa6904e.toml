@@ -1,0 +1,31 @@
+kind = "DojoModel"
+class_hash = "0x31f6f37b596766d95bf14978cb356d7e3ac067c10b6ca1efc8b021a41d59d9"
+original_class_hash = "0x31f6f37b596766d95bf14978cb356d7e3ac067c10b6ca1efc8b021a41d59d9"
+abi = "manifests/dev/base/abis/models/zktt-PlayerComponent-5fa6904e.json"
+tag = "zktt-PlayerComponent"
+manifest_name = "zktt-PlayerComponent-5fa6904e"
+
+[[members]]
+name = "username"
+type = "felt252"
+key = true
+
+[[members]]
+name = "hand"
+type = "HandComponent"
+key = false
+
+[[members]]
+name = "deck"
+type = "DeckComponent"
+key = false
+
+[[members]]
+name = "moves_remaining"
+type = "u8"
+key = false
+
+[[members]]
+name = "score"
+type = "u32"
+key = false

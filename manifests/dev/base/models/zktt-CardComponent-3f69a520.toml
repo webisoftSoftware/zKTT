@@ -1,0 +1,31 @@
+kind = "DojoModel"
+class_hash = "0x65fc8e08ddb5fcb4d64f9d7e8e51fd801d0585620841f7738e0203343de781e"
+original_class_hash = "0x65fc8e08ddb5fcb4d64f9d7e8e51fd801d0585620841f7738e0203343de781e"
+abi = "manifests/dev/base/abis/models/zktt-CardComponent-3f69a520.json"
+tag = "zktt-CardComponent"
+manifest_name = "zktt-CardComponent-3f69a520"
+
+[[members]]
+name = "name"
+type = "felt252"
+key = true
+
+[[members]]
+name = "description"
+type = "felt252"
+key = false
+
+[[members]]
+name = "card_category"
+type = "EnumCardCategory"
+key = false
+
+[[members]]
+name = "value"
+type = "u8"
+key = false
+
+[[members]]
+name = "rank"
+type = "u8"
+key = false
