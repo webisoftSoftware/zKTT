@@ -19,7 +19,8 @@ mod game {
     use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
     use zktt::models::{GameComponent, ActionComponent, CardComponent, DeckComponent, DealerComponent,
      HandComponent, MoneyPileComponent, PlayerComponent, EnumActionType, EnumGameState, EnumMoveError,
-      EnumCardCategory, EnumPlayerState, IGameComponent, IAction, IPlayer, ICard, IHand, IAsset};
+      EnumCardCategory, EnumPlayerState, EnumBlockchainType,
+       IBlockchain, IDealer, IGameComponent, IAction, IPlayer, ICard, IHand, IAsset};
 
     ////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////
@@ -53,13 +54,14 @@ mod game {
             game_component.state = EnumGameState::Started;
 
             let mut dealer_component = get!(world, (seed), (DealerComponent));
-            let mut cards = create_cards(generate_seed(@seed, @game_component.players));
+            let mut card_container = array![];
+            create_assets(@world.contract_address, ref card_container);
             set!(world, (game_component));
 
             let mut game_component = get!(world, (seed), (GameComponent));
             let mut world_ref = world;
-            distribute_cards(ref world_ref, game_component.players, ref cards);
-            dealer_component.cards = cards;
+            distribute_cards(ref world_ref, game_component.players, ref card_container);
+            dealer_component.cards = card_container;
             set!(world, (dealer_component));
             return ();
         }
@@ -79,8 +81,8 @@ mod game {
             let (mut hand, mut player) = get!(world, (get_caller_address()), (HandComponent, PlayerComponent));
             assert!(player.state == EnumPlayerState::TurnStarted, "Not a valid turn");
 
-            let mut pile = get!(world, (seed), DealerComponent);
-            let card_opt = pile.pop_card();
+            let mut dealer = get!(world, (seed), DealerComponent);
+            let card_opt = dealer.pop_card();
 
             if card_opt.is_none() {
                 panic!("Deck does not have any more cards!");
@@ -88,9 +90,8 @@ mod game {
 
             return match hand.add(card_opt.unwrap()) {
                 Result::Ok(()) => {
-                    set!(world, (hand));
                     player.moves_remaining -= 1;
-                    set!(world, (player));
+                    set!(world, (hand, player));
                     return ();
                 },
                 Result::Err(_) => panic!("Error adding card to hand of {0}", player.username)
@@ -175,21 +176,21 @@ mod game {
         return (get_block_timestamp() * players.len().into() * 31).into();
     }
 
-    fn create_assets(ref container: Array<CardComponent>) -> () {
-        let asset = IAsset::new(world_address, "ETH [2]", 2, 5);
-        let ton = ICard::new(world_address, EnumCardCategory::Asset(asset));
+    fn create_assets(world_address: @ContractAddress, ref container: Array<CardComponent>) -> () {
+        let asset = IAsset::new(*world_address, "ETH [2]", 2, 5);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
         container.append(ton);
         return ();
     }
 
-    fn create_blockchains(ref container: Array<CardComponent>) -> () {
-        let blockchain = IAsset::new(world_address, "ETH [2]", 2, 5);
-        let bc = ICard::new(world_address, EnumCardCategory::Blockchain(blockchain));
+    fn create_blockchains(world_address: @ContractAddress, ref container: Array<CardComponent>) -> () {
+        let blockchain = IBlockchain::new(*world_address, "Bitcoin", EnumBlockchainType::Green, 2, 2, 5);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
         container.append(bc);
         return ();
     }
 
-    fn create_action_cards(ref container: Array<CardComponent>) -> () {
+    fn create_action_cards(world_address: @ContractAddress, ref container: Array<CardComponent>) -> () {
     }
 
     fn shuffle(ref world: IWorldDispatcher) -> () {

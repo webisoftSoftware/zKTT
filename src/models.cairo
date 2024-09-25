@@ -45,7 +45,6 @@ struct BlockchainComponent {
     ent_owner: ContractAddress,
     #[key]
     ent_name: ByteArray,
-    name: ByteArray,
     bc_type: EnumBlockchainType,
     fee: u8,
     value: u8,
@@ -184,7 +183,7 @@ impl AssetGroupDisplay of Display<AssetGroupComponent> {
 impl BlockchainDisplay of Display<BlockchainComponent> {
     fn fmt(self: @BlockchainComponent, ref f: Formatter) -> Result<(), Error> {
         let str: ByteArray = format!("Name: {0}, Type: {1}, Fee: {2}, Value {3}, Copies Left: {4}",
-         self.name, self.bc_type, *self.fee, *self.value, *self.copies_left);
+         self.ent_name, self.bc_type, *self.fee, *self.value, *self.copies_left);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -383,6 +382,20 @@ impl AssetImpl of IAsset {
         return AssetComponent {
             ent_owner: owner,
             name: name,
+            value: value,
+            copies_left: copies_left
+        };
+    }
+}
+
+#[generate_trait]
+impl BlockchainImpl of IBlockchain {
+    fn new(owner: ContractAddress, name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8, copies_left: u8) -> BlockchainComponent {
+        return BlockchainComponent {
+            ent_owner: owner,
+            ent_name: name,
+            bc_type: bc_type,
+            fee: fee,
             value: value,
             copies_left: copies_left
         };
