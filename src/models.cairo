@@ -290,12 +290,12 @@ impl EnumBlockchainTypeDisplay of Display<EnumBlockchainType> {
                 let str: ByteArray = format!("Dark Blue");
                 f.buffer.append(@str);
             },
-            EnumBlockchainType::Black(_) => {
-                let str: ByteArray = format!("Black");
+            EnumBlockchainType::Blue(_) => {
+                let str: ByteArray = format!("Blue");
                 f.buffer.append(@str);
             },
-            EnumBlockchainType::Silver(_) => {
-                let str: ByteArray = format!("Silver");
+            EnumBlockchainType::Grey(_) => {
+                let str: ByteArray = format!("Grey");
                 f.buffer.append(@str);
             },
         };
@@ -553,8 +553,8 @@ enum EnumBlockchainType {
     Purple: (),
     Pink: (),
     DarkBlue: (),
-    Black: (),
-    Silver: ()
+    Blue: (),
+    Grey: ()
 }
 
 #[derive(Drop, Serde, Introspect)]
