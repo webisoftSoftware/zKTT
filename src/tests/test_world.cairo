@@ -11,17 +11,17 @@ mod tests {
     };
 
     #[test]
-    fn test_move() {
+    fn test_join() {
         // caller
         let caller = starknet::contract_address_const::<0x0>();
 
         // Models
         let mut models = array![game::TEST_CLASS_HASH];
 
-        println!("{0}", game::TEST_CLASS_HASH);
-
         // Deploy world with models
         let world = spawn_test_world(["game"].span(), models.span());
+
+        println!("{0}", game::TEST_CLASS_HASH);
 
         // Deploy systems contract
         let contract_address = world
@@ -29,20 +29,18 @@ mod tests {
 
         let game_system = IGameDispatcher { contract_address };
 
-        world.grant_writer(dojo::utils::bytearray_hash(@"zktt"), contract_address);
+        world.grant_writer(dojo::utils::bytearray_hash(@"zktt-game"), contract_address);
 
         // Add a new player.
-        set!(world, (IPlayer::new("Nami2301", array![], array![], 3, 0)));
+        set!(world, (IPlayer::new(caller, "Nami2301")));
 
         // call play functions.
-        let _ = game_system.draw();
+        game_system.join("Nami2301");
+        game_system.join("Nami23012");
 
         let player = get!(world, caller, (PlayerComponent));
 
         // Check that we have one less move.
         assert(player.moves_remaining == 2, 'incorrect moves remaining');
-
-        // Check that we have more card in our hand.
-        assert(player.ent_hand.len() == 1, 'incorrect number of cards');
     }
 }

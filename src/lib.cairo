@@ -5,5 +5,5 @@ mod systems {
 mod models;
 
 mod tests {
-    mod test_models;
+    mod test_world;
 }

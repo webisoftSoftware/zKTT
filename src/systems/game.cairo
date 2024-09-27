@@ -52,8 +52,10 @@ mod game {
             game.state = EnumGameState::Started;
 
             let mut dealer = IDealer::new(seed);
-            dealer.cards = array![];
+            let mut world_ref = world;
 
+            dealer.cards = create_cards(@world.contract_address);
+            // distribute_cards(ref world_ref, ref game.players, ref dealer.cards);
             set!(world, (dealer, game));
             return ();
         }
@@ -82,9 +84,8 @@ mod game {
             }
 
             let mut card = card_opt.unwrap();
-            card.ent_owner = get_caller_address();
 
-            return match hand.add(card) {
+            return match hand.add(ICard::new(get_caller_address(), card)) {
                 Result::Ok(()) => {
                     player.moves_remaining -= 1;
                     set!(world, (hand, player));
@@ -169,8 +170,8 @@ mod game {
              EnumCardCategory::Draw(_) => {
                 let mut dealer = get!(world, (world.contract_address), (DealerComponent));
                 assert!(!dealer.cards.is_empty(), "Dealer has no more cards");
-                assert!(hand.add(dealer.pop_card().unwrap()).is_ok(), "cannot add card to hand");
-                assert!(hand.add(dealer.pop_card().unwrap()).is_ok(), "cannot add card to hand");
+                assert!(hand.add(ICard::new(*caller, dealer.pop_card().unwrap())).is_ok(), "cannot add card to hand");
+                assert!(hand.add(ICard::new(*caller, dealer.pop_card().unwrap())).is_ok(), "cannot add card to hand");
              },
              EnumCardCategory::Exchange((blockchain1, blockchain2)) => {
                 // Swap cards from decks.
@@ -214,183 +215,217 @@ mod game {
         return (get_block_timestamp() * players.len().into() * 31).into();
     }
 
-    fn create_cards(world_address: @ContractAddress) -> Array<CardComponent> {
+    fn create_cards(world_address: @ContractAddress) -> Array<EnumCardCategory> {
         let mut container = ArrayTrait::new();
 
         // ASSET CARDS
         let asset = IAsset::new(*world_address, "ETH [1]", 1, 6);
-        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
-        container.append(ton);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset.clone()));
+        container.append(EnumCardCategory::Asset(asset));
+
 
         let blockchain = IBlockchain::new(*world_address, "Base", EnumBlockchainType::LightBlue, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         let blockchain = IBlockchain::new(*world_address, "Arbitrum", EnumBlockchainType::LightBlue, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         let asset = IAsset::new(*world_address, "ETH [10]", 10, 1);
-        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
-        container.append(ton);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset.clone()));
+        container.append(EnumCardCategory::Asset(asset));
+
 
         let blockchain = IBlockchain::new(*world_address, "Gnosis Chain", EnumBlockchainType::Green, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         let asset = IAsset::new(*world_address, "ETH [2]", 2, 5);
-        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
-        container.append(ton);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset.clone()));
+        container.append(EnumCardCategory::Asset(asset));
+
 
         let blockchain = IBlockchain::new(*world_address, "Blast", EnumBlockchainType::Yellow,  2, 3, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         let blockchain = IBlockchain::new(*world_address, "Celestia", EnumBlockchainType::Purple,  2, 3, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         let asset = IAsset::new(*world_address, "ETH [5]", 5, 2);
-        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
-        container.append(ton);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset.clone()));
+        container.append(EnumCardCategory::Asset(asset));
+
 
         let asset = IAsset::new(*world_address, "ETH [4]", 4, 3);
-        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
-        container.append(ton);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset.clone()));
+        container.append(EnumCardCategory::Asset(asset));
+
 
         // Fantom
         let blockchain = IBlockchain::new(*world_address, "Fantom", EnumBlockchainType::LightBlue, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         let asset = IAsset::new(*world_address, "ETH [3]", 3, 3);
-        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset));
-        container.append(ton);
+        let ton = ICard::new(*world_address, EnumCardCategory::Asset(asset.clone()));
+        container.append(EnumCardCategory::Asset(asset));
+
 
         // Metis
         let blockchain = IBlockchain::new(*world_address, "Metis", EnumBlockchainType::LightBlue, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // GREEN
         // Canto
         let blockchain = IBlockchain::new(*world_address, "Canto", EnumBlockchainType::Green, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Near
         let blockchain = IBlockchain::new(*world_address, "Near", EnumBlockchainType::Green, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // RED
         // Avalanche
         let blockchain = IBlockchain::new(*world_address, "Avalanche", EnumBlockchainType::Red, 2, 4, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Kava
         let blockchain = IBlockchain::new(*world_address, "Kava", EnumBlockchainType::Red, 2, 4, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Optimism
         let blockchain = IBlockchain::new(*world_address, "Optimism", EnumBlockchainType::Red, 2, 4, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Silver
         // ZKSync
         let blockchain = IBlockchain::new(*world_address, "ZKSync", EnumBlockchainType::Silver, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Linea
         let blockchain = IBlockchain::new(*world_address, "Linea", EnumBlockchainType::Silver, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Aptos
         let blockchain = IBlockchain::new(*world_address, "Aptos", EnumBlockchainType::Silver, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // YELLOW
         // Scroll
         let blockchain = IBlockchain::new(*world_address, "Scroll", EnumBlockchainType::Yellow, 2, 3, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Celo
         let blockchain = IBlockchain::new(*world_address, "Celo", EnumBlockchainType::Yellow,  2, 3, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // PURPLE
         // Polygon
         let blockchain = IBlockchain::new(*world_address, "Polygon", EnumBlockchainType::Purple, 2, 3, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Solana
         let blockchain = IBlockchain::new(*world_address, "Solana", EnumBlockchainType::Purple,  2, 3, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // PINK
         // Polkadot
         let blockchain = IBlockchain::new(*world_address, "Polkadot", EnumBlockchainType::Pink, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Osmosis
         let blockchain = IBlockchain::new(*world_address, "Osmosis", EnumBlockchainType::Pink, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Taiko
         let blockchain = IBlockchain::new(*world_address, "Taiko", EnumBlockchainType::Pink, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // BLUE
         // Cosmos
         let blockchain = IBlockchain::new(*world_address, "Cosmos", EnumBlockchainType::Blue, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Ton
         let blockchain = IBlockchain::new(*world_address, "Ton", EnumBlockchainType::Blue, 1, 1, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // DARK BLUE
         // Starknet
         let blockchain = IBlockchain::new(*world_address, "Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Ethereum
         let blockchain = IBlockchain::new(*world_address, "Ethereum", EnumBlockchainType::DarkBlue, 3, 4, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // GOLD
         // Bitcoin
         let blockchain = IBlockchain::new(*world_address, "Bitcoin", EnumBlockchainType::Gold, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
 
         // Dogecoin
         let blockchain = IBlockchain::new(*world_address, "Dogecoin", EnumBlockchainType::Gold, 1, 2, 1);
-        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain));
-        container.append(bc);
+        let bc = ICard::new(*world_address, EnumCardCategory::Blockchain(blockchain.clone()));
+        container.append(EnumCardCategory::Blockchain(blockchain));
+
         
         return container;
     }
 
     fn distribute_cards(ref world: IWorldDispatcher, ref players: Array<ContractAddress>,
-            ref cards: Array<CardComponent>) -> () {
+            ref cards: Array<EnumCardCategory>) -> () {
         if players.is_empty() {
             panic!("There are no players to distribute cards to!");
         }
@@ -409,8 +444,9 @@ mod game {
                 }
             }
 
-            if let Option::Some(card) = cards.pop_front() {
+            if let Option::Some(category) = cards.pop_front() {
                 let mut player_hand = get!(world, (current_player), (HandComponent));
+                let card = ICard::new(current_player, category);
                 match player_hand.add(card) {
                     Result::Ok(()) => {
                         set!(world, (player_hand));

@@ -7,7 +7,7 @@ use core::fmt::{Display, Formatter, Error};
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 #[dojo::model]
 struct AssetComponent {
     #[key]
@@ -61,7 +61,7 @@ struct DeckComponent {
 struct DealerComponent {
     #[key]
     ent_owner: ContractAddress,
-    cards: Array<CardComponent>
+    cards: Array<EnumCardCategory>
 }
 
 #[derive(Drop, Serde)]
@@ -385,7 +385,7 @@ impl DealerImpl of IDealer {
         };
     }
 
-    fn pop_card(ref self: DealerComponent) -> Option<CardComponent> {
+    fn pop_card(ref self: DealerComponent) -> Option<EnumCardCategory> {
         if self.cards.is_empty() {
             return Option::None;
         }
