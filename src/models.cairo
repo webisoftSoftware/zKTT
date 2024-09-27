@@ -9,16 +9,6 @@ use core::fmt::{Display, Formatter, Error};
 
 #[derive(Drop, Serde)]
 #[dojo::model]
-struct ActionComponent {
-    #[key]
-    ent_name: ByteArray,
-    from: ContractAddress,
-    to: ContractAddress,
-    action_type: EnumActionType
-}
-
-#[derive(Drop, Serde)]
-#[dojo::model]
 struct AssetComponent {
     #[key]
     ent_owner: ContractAddress,
@@ -36,7 +26,7 @@ struct AssetGroupComponent {
     total_fee_value: u8
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 #[dojo::model]
 struct BlockchainComponent {
     #[key]
@@ -143,14 +133,6 @@ struct PlayerComponent {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-impl ActionDisplay of Display<ActionComponent> {
-    fn fmt(self: @ActionComponent, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Action Type: {0}", self.action_type);
-        f.buffer.append(@str);
-        return Result::Ok(());
-    }
-}
-
 impl AssetDisplay of Display<AssetComponent> {
     fn fmt(self: @AssetComponent, ref f: Formatter) -> Result<(), Error> {
         let str: ByteArray = format!("Name: {0}, Value: {1}, Copies Left: {2}",
@@ -194,45 +176,9 @@ impl CardDisplay of Display<CardComponent> {
     }
 }
 
-impl EnumActionTypeDisplay of Display<EnumActionType> {
-    fn fmt(self: @EnumActionType, ref f: Formatter) -> Result<(), Error> {
-        match self {
-            EnumActionType::Draw(_) => {
-                let str: ByteArray = format!("Draw two cards from the deck");
-                f.buffer.append(@str);
-            },
-            EnumActionType::Exchange((blockchain1, blockchain2)) => {
-                let str: ByteArray = format!("Exchanged Cards: {0} <-> {1}", blockchain1, blockchain2);
-                f.buffer.append(@str);
-            },
-            EnumActionType::Claim(component) => {
-                let str: ByteArray = format!("Gas Fees: {0}", component);
-                f.buffer.append(@str);
-            },
-            EnumActionType::Deny(component) => {
-                let str: ByteArray = format!("51% Attack: {0}", component);
-                f.buffer.append(@str);
-            },
-            EnumActionType::StealBlockchain(component) => {
-                let str: ByteArray = format!("Stolen Blockchain: {0}", component);
-                f.buffer.append(@str);
-            },
-            EnumActionType::StealAssetGroup(component) => {
-                let str: ByteArray = format!("Stolen Asset Group: {0}", component);
-                f.buffer.append(@str);
-            }
-        };
-        return Result::Ok(());
-    }
-}
-
 impl EnumCardCategoryDisplay of Display<EnumCardCategory> {
     fn fmt(self: @EnumCardCategory, ref f: Formatter) -> Result<(), Error> {
         match self {
-            EnumCardCategory::Action(component) => {
-                let str: ByteArray = format!("Asset: ({component})");
-                f.buffer.append(@str);
-            },
             EnumCardCategory::Asset(component) => {
                 let str: ByteArray = format!("Asset: ({component})");
                 f.buffer.append(@str);
@@ -241,12 +187,36 @@ impl EnumCardCategoryDisplay of Display<EnumCardCategory> {
                 let str: ByteArray = format!("AssetGroup: ({component})");
                 f.buffer.append(@str);
             },
-            EnumCardCategory::GasFee(component) => {
-                let str: ByteArray = format!("GasFee: ({component})");
-                f.buffer.append(@str);
-            },
             EnumCardCategory::Blockchain(component) => {
                 let str: ByteArray = format!("Blockchain: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::Claim(component) => {
+                let str: ByteArray = format!("Claim: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::Deny(component) => {
+                let str: ByteArray = format!("Deny: ({component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::Draw(_) => {
+                let str: ByteArray = format!("Draw two cards");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::Exchange((blockchain1, blockchain2)) => {
+                let str: ByteArray = format!("Exchange: ({blockchain1}, {blockchain2})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::GasFee(gas_fee_component) => {
+                let str: ByteArray = format!("GasFee: ({gas_fee_component})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::StealBlockchain(blockchain) => {
+                let str: ByteArray = format!("Steal Blockchain: ({blockchain})");
+                f.buffer.append(@str);
+            },
+            EnumCardCategory::StealAssetGroup(asset_group) => {
+                let str: ByteArray = format!("Steal Asset Group: ({asset_group})");
                 f.buffer.append(@str);
             },
             _ => {}
@@ -258,44 +228,48 @@ impl EnumCardCategoryDisplay of Display<EnumCardCategory> {
 impl EnumBlockchainTypeDisplay of Display<EnumBlockchainType> {
     fn fmt(self: @EnumBlockchainType, ref f: Formatter) -> Result<(), Error> {
         match self {
-            EnumBlockchainType::LightBlue(_) => {
-                let str: ByteArray = format!("Light Blue");
-                f.buffer.append(@str);
-            },
-            EnumBlockchainType::Green(_) => {
-                let str: ByteArray = format!("Green");
-                f.buffer.append(@str);
-            },
-            EnumBlockchainType::Red(_) => {
-                let str: ByteArray = format!("Red");
-                f.buffer.append(@str);
-            },
-            EnumBlockchainType::Gold(_) => {
-                let str: ByteArray = format!("Gold");
-                f.buffer.append(@str);
-            },
-            EnumBlockchainType::Yellow(_) => {
-                let str: ByteArray = format!("Yellow");
-                f.buffer.append(@str);
-            },
-            EnumBlockchainType::Purple(_) => {
-                let str: ByteArray = format!("Purple");
-                f.buffer.append(@str);
-            },
-            EnumBlockchainType::Pink(_) => {
-                let str: ByteArray = format!("Pink");
-                f.buffer.append(@str);
-            },
-            EnumBlockchainType::DarkBlue(_) => {
-                let str: ByteArray = format!("Dark Blue");
+            EnumBlockchainType::Black(_) => {
+                let str: ByteArray = format!("Black");
                 f.buffer.append(@str);
             },
             EnumBlockchainType::Blue(_) => {
                 let str: ByteArray = format!("Blue");
                 f.buffer.append(@str);
             },
-            EnumBlockchainType::Grey(_) => {
-                let str: ByteArray = format!("Grey");
+            EnumBlockchainType::DarkBlue(_) => {
+                let str: ByteArray = format!("Dark Blue");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::Gold(_) => {
+                let str: ByteArray = format!("Gold");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::Green(_) => {
+                let str: ByteArray = format!("Green");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::LightBlue(_) => {
+                let str: ByteArray = format!("Light Blue");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::Pink(_) => {
+                let str: ByteArray = format!("Pink");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::Purple(_) => {
+                let str: ByteArray = format!("Purple");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::Red(_) => {
+                let str: ByteArray = format!("Red");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::Silver(_) => {
+                let str: ByteArray = format!("Silver");
+                f.buffer.append(@str);
+            },
+            EnumBlockchainType::Yellow(_) => {
+                let str: ByteArray = format!("Yellow");
                 f.buffer.append(@str);
             },
         };
@@ -312,10 +286,6 @@ impl EnumMoveErrorDisplay of Display<EnumMoveError> {
             },
             EnumMoveError::CardNotFound(_) => {
                 let str: ByteArray = format!("Card Not found!");
-                f.buffer.append(@str);
-            },
-            EnumMoveError::InvalidActiontype(_) => {
-                let str: ByteArray = format!("Invalid Action Type!");
                 f.buffer.append(@str);
             },
             EnumMoveError::NotEnoughMoves(_) => {
@@ -371,22 +341,6 @@ impl PlayerDisplay of Display<PlayerComponent> {
 ////////////////////////////////////////////////////////////////////////
 
 #[generate_trait]
-impl ActionImpl of IAction {
-    fn new(name: ByteArray, from: ContractAddress, to: ContractAddress, action_type: EnumActionType) -> ActionComponent {
-        return ActionComponent {
-            ent_name: name,
-            from: from,
-            to: to,
-            action_type: action_type
-        };
-    }
-
-    fn get_type(self: @ActionComponent) -> @EnumActionType {
-        return self.action_type;
-    }
-}
-
-#[generate_trait]
 impl AssetImpl of IAsset {
     fn new(owner: ContractAddress, name: ByteArray, value: u8, copies_left: u8) -> AssetComponent {
         return AssetComponent {
@@ -420,14 +374,17 @@ impl CardImpl of ICard {
             category: category
         };
     }
-
-    fn get_category(self: @CardComponent) -> @EnumCardCategory {
-        return self.category;
-    }
 }
 
 #[generate_trait]
 impl DealerImpl of IDealer {
+    fn new(seed: ContractAddress) -> DealerComponent {
+        return DealerComponent {
+            ent_owner: seed,
+            cards: array![]
+        };
+    }
+
     fn pop_card(ref self: DealerComponent) -> Option<CardComponent> {
         if self.cards.is_empty() {
             return Option::None;
@@ -438,9 +395,47 @@ impl DealerImpl of IDealer {
 }
 
 #[generate_trait]
+impl DeckImpl of IDeck {
+    fn contains_bc(ref self: DeckComponent, bc_name : @ByteArray) -> Option<usize> {
+        let mut index = 0;
+        let mut found = Option::None;
+
+        while index < self.blockchains.len() {
+            if let Option::Some(bc_found) = self.blockchains.get(index) {
+                if bc_name == bc_found.unbox().ent_name {
+                    found = Option::Some(index);
+                    break;
+                }
+            }
+        };
+        return found;
+    }
+
+    fn remove(ref self: DeckComponent, card_name: @ByteArray) -> () {
+        if let Option::Some(index_found) = self.contains_bc(card_name) {
+            let mut new_array = ArrayTrait::new();
+
+            let mut index = 0;
+            return loop {
+                if index >= self.blockchains.len() {
+                    break ();
+                }
+
+                if index == index_found {
+                    continue;
+                }
+
+                new_array.append((self.blockchains.at(index)).clone());
+                index += 1;
+            };
+        }
+    }
+}
+
+#[generate_trait]
 impl GameImpl of IGameComponent {
     fn add_player(ref self: GameComponent, mut new_player: ContractAddress) -> () {
-        assert!(self.contains_player(@new_player).is_none());
+        assert!(self.contains_player(@new_player).is_none(), "Player already exists");
         self.players.append(new_player);
         return ();
     }
@@ -456,6 +451,7 @@ impl GameImpl of IGameComponent {
                     break;
                 }
             }
+            index += 1;
         };
         return found;
     }
@@ -530,39 +526,34 @@ enum EnumPlayerState {
 enum EnumMoveError {
     TooManyCardsHeld: (),
     CardNotFound: (),
-    InvalidActiontype: (),
     NotEnoughMoves: ()
 }
 
 #[derive(Drop, Serde, Introspect)]
 enum EnumCardCategory {
-    Action: ActionComponent,
     Asset: AssetComponent,
     AssetGroup: AssetGroupComponent,
     Blockchain: BlockchainComponent,
-    GasFee: GasFeeComponent
-}
-
-#[derive(Drop, Serde, Introspect)]
-enum EnumBlockchainType {
-    LightBlue: (),
-    Green: (),
-    Red: (),
-    Gold: (),
-    Yellow: (),
-    Purple: (),
-    Pink: (),
-    DarkBlue: (),
-    Blue: (),
-    Grey: ()
-}
-
-#[derive(Drop, Serde, Introspect)]
-enum EnumActionType {
-    Draw: (), // Draw two additional cards.
-    Exchange: (Option<BlockchainComponent>, Option<BlockchainComponent>),  // Swap a blockchain with another player.
-    Claim: Option<GasFeeComponent>,  // Make other player(s) pay you a fee.
+    Claim: GasFeeComponent,  // Make other player(s) pay you a fee.
     Deny: MajorityAttackComponent,  // Deny and avoid performing the action imposed.
-    StealBlockchain: Option<BlockchainComponent>,  // Steal a single blockchain from a player's deck.
-    StealAssetGroup: Option<AssetGroupComponent>,  // Steal Asset Group from another player.
+    Draw: (), // Draw two additional cards.
+    Exchange: (BlockchainComponent, BlockchainComponent),  // Swap a blockchain with another player.
+    GasFee: GasFeeComponent,
+    StealBlockchain: BlockchainComponent,  // Steal a single blockchain from a player's deck.
+    StealAssetGroup: AssetGroupComponent,  // Steal Asset Group from another player.
+}
+
+#[derive(Drop, Serde, Clone, Introspect)]
+enum EnumBlockchainType {
+    Black: (),
+    Blue: (),
+    DarkBlue: (),
+    Gold: (),
+    Green: (),
+    LightBlue: (),
+    Pink: (),
+    Purple: (),
+    Red: (),
+    Silver: (),
+    Yellow: ()
 }
