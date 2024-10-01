@@ -7,7 +7,7 @@ mod tests {
     // import test utils
     use zktt::{
         systems::{game::{game, IGameDispatcher, IGameDispatcherTrait}},
-        models::{CardComponent, PlayerComponent, IPlayer}
+        models::{PlayerComponent, IPlayer}
     };
 
     #[test]

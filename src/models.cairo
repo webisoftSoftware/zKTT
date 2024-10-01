@@ -7,47 +7,32 @@ use core::fmt::{Display, Formatter, Error};
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-#[derive(Drop, Serde, Clone)]
-#[dojo::model]
+#[derive(Drop, Serde, Clone, Introspect)]
 struct AssetComponent {
-    #[key]
-    ent_owner: ContractAddress,
+    owner: ContractAddress,
     name: ByteArray,
     value: u8,
     copies_left: u8
 }
 
-#[derive(Drop, Serde)]
-#[dojo::model]
+#[derive(Drop, Serde, Clone, Introspect)]
 struct AssetGroupComponent {
-    #[key]
-    ent_owner: ContractAddress,
+    owner: ContractAddress,
     set: Array<BlockchainComponent>,
     total_fee_value: u8
 }
 
-#[derive(Drop, Serde, Clone)]
-#[dojo::model]
+#[derive(Drop, Serde, Clone, Introspect)]
 struct BlockchainComponent {
-    #[key]
-    ent_owner: ContractAddress,
-    #[key]
-    ent_name: ByteArray,
+    owner: ContractAddress,
+    name: ByteArray,
     bc_type: EnumBlockchainType,
     fee: u8,
     value: u8,
     copies_left: u8
 }
 
-#[derive(Drop, Serde)]
-#[dojo::model]
-struct CardComponent {
-    #[key]
-    ent_owner: ContractAddress,
-    category: EnumCardCategory,
-}
-
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 #[dojo::model]
 struct DeckComponent {
     #[key]
@@ -56,7 +41,7 @@ struct DeckComponent {
     asset_groups: Array<AssetGroupComponent>
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 #[dojo::model]
 struct DealerComponent {
     #[key]
@@ -73,40 +58,37 @@ struct GameComponent {
     pub players: Array<ContractAddress>
 }
 
-#[derive(Drop, Serde)]
-#[dojo::model]
+#[derive(Drop, Serde, Clone, Introspect)]
 struct GasFeeComponent {
-    #[key]
-    ent_owner: ContractAddress,
+    owner: ContractAddress,
     name: ByteArray,
     players_affected: Array<ContractAddress>,
-    asset_group: Array<BlockchainComponent>,
-    first_blockchain_type_affected: EnumBlockchainType,
-    second_blockchain_type_affected: Option<EnumBlockchainType>,
+    // If there is no blockchain specified, it can be applied to any blockchain.
+    blockchain_type_affected: EnumBlockchainType,
+    multiplier: Array<u8>,
+    count: u8,  // How many blockchains stacked.
     fee_per_player: u8,
     value: u8,
     copies_left: u8
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 #[dojo::model]
 struct HandComponent {
     #[key]
     ent_owner: ContractAddress,
-    cards: Array<CardComponent>,
+    cards: Array<EnumCardCategory>,
 }
 
-#[derive(Drop, Serde)]
-#[dojo::model]
+#[derive(Drop, Serde, Clone, Introspect)]
 struct MajorityAttackComponent {
-    #[key]
-    ent_owner: ContractAddress,
+    owner: ContractAddress,
     name: ByteArray,
     value: u8,
     copies_left: u8
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 #[dojo::model]
 struct MoneyPileComponent {
     #[key]
@@ -115,7 +97,7 @@ struct MoneyPileComponent {
     total_value: u8
 }
 
-#[derive(Drop, Serde)]
+#[derive(Drop, Serde, Clone)]
 #[dojo::model]
 struct PlayerComponent {
     #[key]
@@ -162,15 +144,7 @@ impl AssetGroupDisplay of Display<AssetGroupComponent> {
 impl BlockchainDisplay of Display<BlockchainComponent> {
     fn fmt(self: @BlockchainComponent, ref f: Formatter) -> Result<(), Error> {
         let str: ByteArray = format!("Name: {0}, Type: {1}, Fee: {2}, Value {3}, Copies Left: {4}",
-         self.ent_name, self.bc_type, *self.fee, *self.value, *self.copies_left);
-        f.buffer.append(@str);
-        return Result::Ok(());
-    }
-}
-
-impl CardDisplay of Display<CardComponent> {
-    fn fmt(self: @CardComponent, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Category: {0}", self.category);
+         self.name, self.bc_type, *self.fee, *self.value, *self.copies_left);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -207,10 +181,6 @@ impl EnumCardCategoryDisplay of Display<EnumCardCategory> {
                 let str: ByteArray = format!("Exchange: ({blockchain1}, {blockchain2})");
                 f.buffer.append(@str);
             },
-            EnumCardCategory::GasFee(gas_fee_component) => {
-                let str: ByteArray = format!("GasFee: ({gas_fee_component})");
-                f.buffer.append(@str);
-            },
             EnumCardCategory::StealBlockchain(blockchain) => {
                 let str: ByteArray = format!("Steal Blockchain: ({blockchain})");
                 f.buffer.append(@str);
@@ -228,6 +198,10 @@ impl EnumCardCategoryDisplay of Display<EnumCardCategory> {
 impl EnumBlockchainTypeDisplay of Display<EnumBlockchainType> {
     fn fmt(self: @EnumBlockchainType, ref f: Formatter) -> Result<(), Error> {
         match self {
+            EnumBlockchainType::All(_) => {
+                let str: ByteArray = format!("All Colors");
+                f.buffer.append(@str);
+            },
             EnumBlockchainType::Black(_) => {
                 let str: ByteArray = format!("Black");
                 f.buffer.append(@str);
@@ -299,18 +273,9 @@ impl EnumMoveErrorDisplay of Display<EnumMoveError> {
 
 impl GasFeeDisplay of Display<GasFeeComponent> {
     fn fmt(self: @GasFeeComponent, ref f: Formatter) -> Result<(), Error> {
-        if let Option::Some(second_bc_affected) = self.second_blockchain_type_affected {
-            let str: ByteArray = format!("Name: {0}, First Targeted Blockchain: {1}, Second (opt)
-                Targeted Blockchain: {2}, Value: {3}, Fees Per Player: {4}, Copies Left: {5}",
-                self.name, self.first_blockchain_type_affected, second_bc_affected, *self.value,
-                *self.fee_per_player, *self.copies_left);
-            f.buffer.append(@str);
-            return Result::Ok(());
-        }
-
         let str: ByteArray = format!("Name: {0}, First Targeted Blockchain: {1}, Value: {2}\n
-            Fees Per Player: {3}, Copies Left: {4}", self.name, self.first_blockchain_type_affected,
-             *self.value, *self.fee_per_player, *self.copies_left);
+            Fees Per Player: {3}, Copies Left: {4}", self.name, self.blockchain_type_affected, *self.value,
+             *self.fee_per_player, *self.copies_left);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -344,7 +309,7 @@ impl PlayerDisplay of Display<PlayerComponent> {
 impl AssetImpl of IAsset {
     fn new(owner: ContractAddress, name: ByteArray, value: u8, copies_left: u8) -> AssetComponent {
         return AssetComponent {
-            ent_owner: owner,
+            owner: owner,
             name: name,
             value: value,
             copies_left: copies_left
@@ -356,8 +321,8 @@ impl AssetImpl of IAsset {
 impl BlockchainImpl of IBlockchain {
     fn new(owner: ContractAddress, name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8, copies_left: u8) -> BlockchainComponent {
         return BlockchainComponent {
-            ent_owner: owner,
-            ent_name: name,
+            owner: owner,
+            name: name,
             bc_type: bc_type,
             fee: fee,
             value: value,
@@ -367,21 +332,11 @@ impl BlockchainImpl of IBlockchain {
 }
 
 #[generate_trait]
-impl CardImpl of ICard {
-    fn new(owner: ContractAddress, category: EnumCardCategory) -> CardComponent {
-        return CardComponent {
-            ent_owner: owner,
-            category: category
-        };
-    }
-}
-
-#[generate_trait]
 impl DealerImpl of IDealer {
-    fn new(seed: ContractAddress) -> DealerComponent {
+    fn new(owner: ContractAddress, cards: Array<EnumCardCategory>) -> DealerComponent {
         return DealerComponent {
-            ent_owner: seed,
-            cards: array![]
+            ent_owner: owner,
+            cards: cards
         };
     }
 
@@ -402,7 +357,22 @@ impl DeckImpl of IDeck {
 
         while index < self.blockchains.len() {
             if let Option::Some(bc_found) = self.blockchains.get(index) {
-                if bc_name == bc_found.unbox().ent_name {
+                if bc_name == bc_found.unbox().name {
+                    found = Option::Some(index);
+                    break;
+                }
+            }
+        };
+        return found;
+    }
+
+    fn contains_bc_type(ref self: DeckComponent, bc_type : @EnumBlockchainType) -> Option<usize> {
+        let mut index = 0;
+        let mut found = Option::None;
+
+        while index < self.blockchains.len() {
+            if let Option::Some(bc_found) = self.blockchains.get(index) {
+                if bc_type == bc_found.unbox().bc_type {
                     found = Option::Some(index);
                     break;
                 }
@@ -429,6 +399,90 @@ impl DeckImpl of IDeck {
                 index += 1;
             };
         }
+    }
+}
+
+#[generate_trait]
+impl CardImpl of IEnumCardCategory {
+    fn get_owner(self: @EnumCardCategory) -> @ContractAddress {
+        return match self {
+            EnumCardCategory::Asset(component) => {
+                return component.owner;
+            },
+            EnumCardCategory::AssetGroup(component) => {
+                return component.owner;
+            },
+            EnumCardCategory::Blockchain(component) => {
+                return component.owner;
+            },
+            EnumCardCategory::Claim(component) => {
+                return component.owner;
+            },
+            EnumCardCategory::Deny(component) => {
+                return component.owner;
+            },
+            EnumCardCategory::Draw(world_address) => {
+                return world_address;
+            },
+            EnumCardCategory::Exchange((blockchain1, _blockchain2)) => {
+                return blockchain1.owner;
+            },
+            EnumCardCategory::StealBlockchain(blockchain) => {
+                return blockchain.owner;
+            },
+            EnumCardCategory::StealAssetGroup(asset_group) => {
+                return asset_group.owner;
+            }
+        };
+    }
+
+    fn set_owner(self: EnumCardCategory, new_owner: ContractAddress) -> EnumCardCategory {
+        return match self {
+            EnumCardCategory::Asset(component) => {
+                let mut copy = component;
+                copy.owner = new_owner;
+                return EnumCardCategory::Asset(copy);
+            },
+            EnumCardCategory::AssetGroup(component) => {
+                let mut copy = component;
+                copy.owner = new_owner;
+                return EnumCardCategory::AssetGroup(copy);
+            },
+            EnumCardCategory::Blockchain(component) => {
+                let mut copy = component;
+                copy.owner = new_owner;
+                return EnumCardCategory::Blockchain(copy);
+            },
+            EnumCardCategory::Claim(component) => {
+                let mut copy = component;
+                copy.owner = new_owner;
+                return EnumCardCategory::Claim(copy);
+            },
+            EnumCardCategory::Deny(component) => {
+                let mut copy = component;
+                copy.owner = new_owner;
+                return EnumCardCategory::Deny(copy);
+            },
+            EnumCardCategory::Draw(component) => {
+                return EnumCardCategory::Draw(component);
+            },
+            EnumCardCategory::Exchange((component1, component2)) => {
+                return EnumCardCategory::Exchange((component1, component2));
+            },
+            EnumCardCategory::StealBlockchain(blockchain) => {
+                let mut copy = blockchain;
+                copy.owner = new_owner;
+                return EnumCardCategory::StealBlockchain(copy);
+            },
+            EnumCardCategory::StealAssetGroup(asset_group) => {
+                let mut copy = asset_group;
+                copy.owner = new_owner;
+                return EnumCardCategory::StealAssetGroup(copy);
+            },
+            _ => {
+                return self;
+            }
+        };
     }
 }
 
@@ -479,12 +533,21 @@ impl GameImpl of IGameComponent {
 
 #[generate_trait]
 impl HandImpl of IHand {
-    fn add(ref self: HandComponent, card: CardComponent) -> Result<(), EnumMoveError> {
+    fn new(owner: ContractAddress, cards: Array<EnumCardCategory>) -> HandComponent {
+        return HandComponent {
+            ent_owner: owner,
+            cards: cards
+        };
+    }
+
+    fn add(ref self: HandComponent, card: EnumCardCategory) -> Result<(), EnumMoveError> {
         if self.cards.len() == 9 {
             return Result::Err(EnumMoveError::TooManyCardsHeld);
         }
 
-        self.cards.append(card);
+        // Transfer ownership.
+        let new_card = card.set_owner(self.ent_owner);
+        self.cards.append(new_card);
         return Result::Ok(());
     }
 }
@@ -529,22 +592,22 @@ enum EnumMoveError {
     NotEnoughMoves: ()
 }
 
-#[derive(Drop, Serde, Introspect)]
+#[derive(Drop, Serde, Clone, Introspect)]
 enum EnumCardCategory {
     Asset: AssetComponent,
     AssetGroup: AssetGroupComponent,
     Blockchain: BlockchainComponent,
     Claim: GasFeeComponent,  // Make other player(s) pay you a fee.
     Deny: MajorityAttackComponent,  // Deny and avoid performing the action imposed.
-    Draw: (), // Draw two additional cards.
+    Draw: ContractAddress, // Draw two additional cards.
     Exchange: (BlockchainComponent, BlockchainComponent),  // Swap a blockchain with another player.
-    GasFee: GasFeeComponent,
     StealBlockchain: BlockchainComponent,  // Steal a single blockchain from a player's deck.
     StealAssetGroup: AssetGroupComponent,  // Steal Asset Group from another player.
 }
 
-#[derive(Drop, Serde, Clone, Introspect)]
+#[derive(Drop, Serde, Clone, PartialEq, Introspect)]
 enum EnumBlockchainType {
+    All: (),
     Black: (),
     Blue: (),
     DarkBlue: (),

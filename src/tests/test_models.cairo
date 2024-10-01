@@ -1,17 +1,20 @@
 #[cfg(test)]
 mod tests {
     use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
-    use zktt::models::{GameComponent, CardComponent, DeckComponent, DealerComponent,
+    use zktt::models::{GameComponent, DeckComponent, DealerComponent,
          HandComponent, MoneyPileComponent, PlayerComponent, EnumGameState, EnumMoveError,
           EnumCardCategory, EnumPlayerState, EnumBlockchainType,
-           IBlockchain, IDeck, IDealer, IGameComponent, IPlayer, ICard, IHand, IAsset};
-    use zktt::systems::{game::{game, IGameDispatcher, IGameDispatcherTrait}};
+           IBlockchain, IDeck, IDealer, IGameComponent, IPlayer, IHand, IAsset};
+    use zktt::systems::game::game;
 
     #[test]
-    fn test_print() -> () {
-        let caller = starknet::contract_address_const::<0x0>();
-        let game_system = IGameDispatcher { caller };
-        let cards = game_system.create_cards(@caller);
+    fn test_start() -> () {
+        let callers = array![starknet::contract_address_const::<0x0>(),
+         starknet::contract_address_const::<0x1>(),
+         starknet::contract_address_const::<0x2>()];
+
+        let cards = game::create_cards(callers.at(0));
+        game::distribute_cards()
 
         let mut index = 0;
         loop {
