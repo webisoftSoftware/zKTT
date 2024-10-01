@@ -1,6 +1,6 @@
 use zktt::models::{ActionComponent, PlayerComponent, EnumCardCategory, EnumGameState, EnumMoveError};
 use starknet::ContractAddress;
-
+//comment
 #[dojo::interface]
 trait IGame {
     fn join(ref world: IWorldDispatcher, username: ByteArray) -> ();
