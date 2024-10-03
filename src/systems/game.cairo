@@ -1,3 +1,15 @@
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+/////////////////////            ____________  /////////////////////////
+////////////////////    ___| |/ /_   _|_   _| //////////////////////////
+////////////////////   |_  / ' /  | |   | |   //////////////////////////
+////////////////////    / /| . \  | |   | |   //////////////////////////
+////////////////////   /___|_|\_\ |_|   |_|   //////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
 use zktt::models::{EnumCard, EnumGameState, EnumMoveError};
 use starknet::ContractAddress;
 
@@ -11,7 +23,6 @@ trait ITable {
     fn move(ref world: IWorldDispatcher, card: EnumCard) -> ();
     fn end_turn(ref world: IWorldDispatcher) -> ();
     fn leave(ref world: IWorldDispatcher) -> ();
-    fn end(ref world: IWorldDispatcher) -> ();
 }
 
 #[dojo::contract]
@@ -72,7 +83,11 @@ mod table {
         fn draw(ref world: IWorldDispatcher) -> () {
             let seed = world.contract_address;
             let (mut hand, mut player) = get!(world, (get_caller_address()), (ComponentHand, ComponentPlayer));
-            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not a valid turn");
+            let game = get!(world, (world.contract_address), (ComponentGame));
+
+            assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
+            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
+            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not player's turn");
             assert!(player.m_moves_remaining != 0, "No moves left");
 
             let mut dealer = get!(world, (seed), ComponentDealer);
@@ -84,7 +99,7 @@ mod table {
 
             return match hand.add(card_opt.unwrap()) {
                 Result::Ok(()) => {
-                    player.m_moves_remaining -= 1;
+                    player.m_state = EnumPlayerState::DrawnCards;
                     set!(world, (hand, player));
                     return ();
                 },
@@ -93,10 +108,13 @@ mod table {
         }
 
         fn play(ref world: IWorldDispatcher, card: EnumCard) -> () {
-            assert!(get!(world, (world.contract_address), (ComponentGame)).m_state == EnumGameState::Started,
-                         "Game has not started yet");
+            let game = get!(world, (world.contract_address), (ComponentGame));
+            assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
             let mut player = get!(world, get_caller_address(), (ComponentPlayer));
+            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
+            assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
+            assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
             assert!(player.m_moves_remaining != 0, "No moves left");
 
             let mut world_cpy = world;
@@ -108,22 +126,27 @@ mod table {
         }
 
         fn move(ref world: IWorldDispatcher, card: EnumCard) -> () {
-            assert!(get!(world, (world.contract_address), (ComponentGame)).m_state == EnumGameState::Started,
-                                     "Game has not started yet");
+            let game = get!(world, (world.contract_address), (ComponentGame));
+            assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
-            assert!(@get_caller_address() == card.get_owner(), "Invalid owner");
-            let mut player = get!(world, (get_caller_address()), (ComponentPlayer));
+            let mut player = get!(world, get_caller_address(), (ComponentPlayer));
+            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
+            assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
+            assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
+
+            assert!(@player.ent_owner == card.get_owner(), "Invalid owner");
             // TODO: Move card around in deck.
             set!(world, (player));
             return ();
         }
 
         fn end_turn(ref world: IWorldDispatcher) -> () {
-            assert!(get!(world, (world.contract_address), (ComponentGame)).m_state == EnumGameState::Started,
-                         "Game has not started yet");
+            let game = get!(world, (world.contract_address), (ComponentGame));
+            assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
             let mut player = get!(world, get_caller_address(), (ComponentPlayer));
-            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not a valid turn");
+            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
+            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not player's turn");
 
             player.m_state = EnumPlayerState::TurnEnded;
             set!(world, (player));
@@ -131,24 +154,14 @@ mod table {
         }
 
         fn leave(ref world: IWorldDispatcher) -> () {
-            let player = get!(world, (get_caller_address()), (ComponentPlayer));
-            let mut game = get!(world, (world.contract_address), (ComponentGame));
-
-            if let Option::Some(_) = game.contains_player(@player.m_ent_owner) {
-                game.remove_player(@get_caller_address());
-                delete!(world, (player));
-                set!(world, (game));
-                return ();
-            }
-
-            panic!("Player not Found!");
-        }
-
-        fn end(ref world: IWorldDispatcher) -> () {
-            let mut game = get!(world, (world.contract_address), (ComponentGame));
+            let game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
-            game.m_state = EnumGameState::Ended;
+            let player = get!(world, (get_caller_address()), (ComponentPlayer));
+            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
+
+            game.remove_player(@get_caller_address());
+            delete!(world, (player));
             set!(world, (game));
             return ();
         }
@@ -166,7 +179,7 @@ mod table {
         hand.remove(@card);
 
         match card {
-            EnumCard::Asset(asset) => {
+            card == EnumCard::Asset(asset) => {
                 money.add(asset);
                 set!(world, (money));
             },

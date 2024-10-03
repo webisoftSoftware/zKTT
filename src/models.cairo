@@ -1,3 +1,15 @@
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+/////////////////////            ____________  /////////////////////////
+////////////////////    ___| |/ /_   _|_   _| //////////////////////////
+////////////////////   |_  / ' /  | |   | |   //////////////////////////
+////////////////////    / /| . \  | |   | |   //////////////////////////
+////////////////////   /___|_|\_\ |_|   |_|   //////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
+
 use starknet::ContractAddress;
 use core::fmt::{Display, Formatter, Error};
 
@@ -11,7 +23,19 @@ use core::fmt::{Display, Formatter, Error};
 /// yet.
 ///
 /// Per table.
-#[derive(Drop, Serde, Clone)]
+#[derive(Drop, Serde, Clone, Debug)]
+#[dojo::model]
+struct ComponentCard {
+    #[key]
+    m_ent_owner: ContractAddress,
+    m_type: EnumCard
+}
+
+/// Component that represents the Pile of cards in the middle of the board, not owned by any player
+/// yet.
+///
+/// Per table.
+#[derive(Drop, Serde, Clone, Debug)]
 #[dojo::model]
 struct ComponentDealer {
     #[key]
@@ -22,7 +46,7 @@ struct ComponentDealer {
 /// Component that represents the deck containing all blockchains not in the player's hand.
 ///
 /// Per player.
-#[derive(Drop, Serde, Clone)]
+#[derive(Drop, Serde, Clone, Debug)]
 #[dojo::model]
 struct ComponentDeck {
     #[key]
@@ -46,7 +70,7 @@ struct ComponentGame {
 /// Component that represents the cards held in hand of a player in the game.
 ///
 /// Per player.
-#[derive(Drop, Serde, Clone)]
+#[derive(Drop, Serde, Clone, Debug)]
 #[dojo::model]
 struct ComponentHand {
     #[key]
@@ -57,7 +81,7 @@ struct ComponentHand {
 /// Component that represents the pile of assets that each player owns in the game.
 ///
 /// Per player.
-#[derive(Drop, Serde, Clone)]
+#[derive(Drop, Serde, Clone, Debug)]
 #[dojo::model]
 struct ComponentMoneyPile {
     #[key]
@@ -70,7 +94,7 @@ struct ComponentMoneyPile {
 /// address is.
 ///
 /// Per player.
-#[derive(Drop, Serde, Clone)]
+#[derive(Drop, Serde, Clone, Debug)]
 #[dojo::model]
 struct ComponentPlayer {
     #[key]
@@ -89,7 +113,7 @@ struct ComponentPlayer {
 /////////////////////////////////////////////////////////////////////////
 
 /// Card containing the info about an asset (card that only has monetary value).
-#[derive(Drop, Serde, Clone, Introspect)]
+#[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct StructAsset {
     m_owner: ContractAddress,
     m_name: ByteArray,
@@ -98,7 +122,7 @@ struct StructAsset {
 }
 
 /// Card containing the info about a specific asset group (set of matching blockchains).
-#[derive(Drop, Serde, Clone, Introspect)]
+#[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct StructAssetGroup {
     m_owner: ContractAddress,
     m_set: Array<StructBlockchain>,
@@ -106,7 +130,7 @@ struct StructAssetGroup {
 }
 
 /// Card containing the info about a specific blockchain.
-#[derive(Drop, Serde, Clone, Introspect)]
+#[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct StructBlockchain {
     m_owner: ContractAddress,
     m_name: ByteArray,
@@ -117,7 +141,7 @@ struct StructBlockchain {
 }
 
 /// Card that allows a player to draw two cards, and make it only count as one move.
-#[derive(Drop, Serde, Clone, Introspect)]
+#[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct StructDraw {
     m_owner: ContractAddress,
     m_value: u8,
@@ -126,7 +150,7 @@ struct StructDraw {
 
 /// Make one or more players pay you a fee depending on the blockchain rent (determined by how
 /// many blockchains are stacked on top of each other (same color).
-#[derive(Drop, Serde, Clone, Introspect)]
+#[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct StructGasFee {
     m_owner: ContractAddress,
     m_name: ByteArray,
@@ -141,7 +165,7 @@ struct StructGasFee {
 }
 
 /// Steal an asset group from an opponent.
-#[derive(Drop, Serde, Clone, Introspect)]
+#[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct StructMajorityAttack {
     m_owner: ContractAddress,
     m_name: ByteArray,
@@ -862,20 +886,22 @@ impl PlayerImpl of IPlayer {
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
+#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
 enum EnumGameState {
     WaitingForPlayers: (),
-    Started: (),
-    Ended: ()
+    Started: ()
 }
 
-#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
+#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
 enum EnumPlayerState {
+    NotJoined: (),
+    Joined: (),
     TurnStarted: (),
+    DrawnCards: (),
     TurnEnded: (),
 }
 
-#[derive(Copy, Drop, Serde, PartialEq, Introspect)]
+#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
 enum EnumMoveError {
     CardAlreadyPresent: (),
     CardNotFound: (),
@@ -884,7 +910,7 @@ enum EnumMoveError {
     SetAlreadyPresent: ()
 }
 
-#[derive(Drop, Serde, Clone, PartialEq, Introspect)]
+#[derive(Drop, Serde, Clone, PartialEq, Introspect, Debug)]
 enum EnumCard {
     Asset: StructAsset,
     Blockchain: StructBlockchain,
@@ -895,7 +921,7 @@ enum EnumCard {
     StealAssetGroup: StructAssetGroup,  // Steal Asset Group from another player.
 }
 
-#[derive(Drop, Serde, Clone, PartialEq, Introspect)]
+#[derive(Drop, Serde, Clone, PartialEq, Introspect, Debug)]
 enum EnumBlockchainType {
     All: (),
     Blue: (),

@@ -1,6 +1,6 @@
+<img src="assets/zktt_transparent.png" alt="drawing" style="width:400px;"/>
+
 # zKTT - Cairo Contracts
-
-
 ### Running Locally
 
 
