@@ -16,12 +16,12 @@ mod tests {
         let caller = starknet::contract_address_const::<0x0>();
 
         // Models
-        let mut models = array![game::TEST_CLASS_HASH];
+        let mut models = array![table::TEST_CLASS_HASH];
 
         // Deploy world with models
         let world = spawn_test_world(["game"].span(), models.span());
 
-        println!("{0}", game::TEST_CLASS_HASH);
+        println!("{0}", table::TEST_CLASS_HASH);
 
         // Deploy systems contract
         let contract_address = world

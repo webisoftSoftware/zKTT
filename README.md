@@ -1,6 +1,10 @@
-# Zero Knowledge Table Top
+# zKTT - Cairo Contracts
 
-## Running Locally
+
+### Running Locally
+
+
+---
 
 #### Terminal one (Make sure this is running)
 
@@ -12,14 +16,26 @@ katana --disable-fee --allowed-origins "*"
 #### Terminal two
 
 ```bash
-# Build the example
+# Build the contracts
 sozo build
 
-# Migrate the example
+# Load models and systems onto katana.
 sozo migrate apply
 
+# Authorize writing of components.
+./auth.sh
+
+# Join with two example accounts.
+./join.sh
+
+# Interact with the world and the systems.
+sozo execute --world <world-hash> table <system-name> (i.e start)
+```
+
+#### Terminal three
+```bash
 # Start Torii
-torii --world 0x3b34889efbdf01f707d5d7421f112e8fb85a42fb6f2e5422c75ce3253148b0e --allowed-origins "*"
+torii --world <world-hash> --allowed-origins "*"
 ```
 
 ---
