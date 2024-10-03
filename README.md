@@ -1,3 +1,4 @@
+[![CI](https://github.com/webisoftSoftware/zktt/actions/workflows/test.yaml/badge.svg)](https://github.com/webisoftSoftware/zktt/actions/workflows/test.yaml)
 <a href="https://zktable.top"><img src="assets/zktt_transparent.png" alt="zkTT logo" style="width:400px;"></a>
 
 # zKTT - Cairo Contracts
