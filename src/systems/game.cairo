@@ -134,7 +134,7 @@ mod table {
             assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
             assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
 
-            assert!(@player.ent_owner == card.get_owner(), "Invalid owner");
+            assert!(@get_caller_address() == card.get_owner(), "Invalid owner");
             // TODO: Move card around in deck.
             set!(world, (player));
             return ();
@@ -154,7 +154,7 @@ mod table {
         }
 
         fn leave(ref world: IWorldDispatcher) -> () {
-            let game = get!(world, (world.contract_address), (ComponentGame));
+            let mut game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
             let player = get!(world, (get_caller_address()), (ComponentPlayer));
@@ -179,7 +179,7 @@ mod table {
         hand.remove(@card);
 
         match card {
-            card == EnumCard::Asset(asset) => {
+            EnumCard::Asset(asset) => {
                 money.add(asset);
                 set!(world, (money));
             },

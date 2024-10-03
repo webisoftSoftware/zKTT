@@ -1,4 +1,4 @@
-<img src="assets/zktt_transparent.png" alt="drawing" style="width:400px;"/>
+<a href="https://zktable.top"><img src="assets/zktt_transparent.png" alt="zkTT logo" style="width:400px;"></a>
 
 # zKTT - Cairo Contracts
 ### Running Locally
