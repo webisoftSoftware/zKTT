@@ -25,9 +25,6 @@ sozo build
 # Load models and systems onto katana.
 sozo migrate apply
 
-# Authorize writing of components.
-./auth.sh
-
 # Join with two example accounts.
 ./join.sh
 
