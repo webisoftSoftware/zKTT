@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-use zktt::models::{EnumCard, EnumGameState, EnumMoveError};
+use zktt::models::components::{EnumCard, EnumGameState, EnumMoveError};
 use starknet::ContractAddress;
 
 #[dojo::interface]
@@ -29,7 +29,7 @@ trait ITable {
 mod table {
     use super::{ITable};
     use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
-    use zktt::models::{ComponentDeck, ComponentDealer, ComponentHand, ComponentGame,
+    use zktt::models::components::{ComponentDeck, ComponentDealer, ComponentHand, ComponentGame,
      ComponentMoneyPile, ComponentPlayer, EnumGameState, EnumMoveError,
       EnumCard, EnumPlayerState, EnumBlockchainType,
        IBlockchain, IDeck, IDealer, IEnumCard, IGame, IMoney, IPlayer, IHand, IAsset,
@@ -49,7 +49,9 @@ mod table {
             assert!(game.m_players.len() < 5, "Lobby already full");
 
             game.add_player(get_caller_address());
-            let new_player: ComponentPlayer = IPlayer::new(get_caller_address(), username);
+            let mut new_player: ComponentPlayer = IPlayer::new(get_caller_address(), username);
+            new_player.m_state = EnumPlayerState::Joined;
+
             set!(world, (new_player, game));
             return ();
         }
@@ -75,6 +77,7 @@ mod table {
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
             let mut player = get!(world, get_caller_address(), (ComponentPlayer));
+            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
             assert!(player.m_state == EnumPlayerState::TurnEnded, "Not a valid turn");
             player.m_state = EnumPlayerState::TurnStarted;
             set!(world, (player));
@@ -87,7 +90,7 @@ mod table {
 
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
             assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not player's turn");
+            assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
             assert!(player.m_moves_remaining != 0, "No moves left");
 
             let mut dealer = get!(world, (seed), ComponentDealer);
@@ -424,40 +427,29 @@ mod table {
             panic!("There are no players to distribute cards to!");
         }
 
-        let mut index = 0;
-        let mut current_player = players.pop_front().unwrap();
-        let player_hand = IHand::new(current_player, array![]);
-        set!(world, (player_hand));
-
         return loop {
-            if index >= players.len() || cards.is_empty()  {
+            if players.is_empty() || cards.is_empty()  {
                 break ();
             }
-
-            // Cycle through players every 5 cards given.
-            if index != 0 && index % 5 == 0 {
-                if let Option::Some(next_player) = players.pop_front() {
-                    current_player = next_player;
-                    let player_hand = IHand::new(current_player, array![]);
-                    set!(world, (player_hand));
-                }
-            }
-
+            let current_player = players.pop_front().unwrap();
             let mut player_hand = get!(world, (current_player), (ComponentHand));
 
-            if let Option::Some(category) = cards.pop_front() {
-                player_hand = get!(world, (current_player), (ComponentHand));
-                match player_hand.add(category) {
-                    Result::Ok(()) => {
-                        set!(world, (player_hand));
-                    },
-                    Result::Err(err) => {
-                        // Maybe send an event.
-                        panic!("Error happened when adding card Error => {0}", err);
-                    }
-                };
-            }
-            index += 1;
+            let mut index: usize = 0;
+            while index < 5 {
+                if let Option::Some(card_given) = cards.pop_front() {
+                    match player_hand.add(card_given) {
+                        Result::Err(err) => {
+                            // Maybe send an event.
+                            panic!("Error happened when adding card Error => {0}", err);
+                        },
+                        _ => {}
+                    };
+                }
+
+                index += 1;
+            };
+
+            set!(world, (player_hand));
         };
     }
 

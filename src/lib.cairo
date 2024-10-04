@@ -14,8 +14,11 @@ mod systems {
     mod game;
 }
 
-mod models;
+mod models {
+    mod components;
+}
 
 mod tests {
     mod test_models;
+    mod test_world;
 }

@@ -179,6 +179,22 @@ struct StructMajorityAttack {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
+impl ComponentHandDisplay of Display<ComponentHand> {
+    fn fmt(self: @ComponentHand, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = "Hand: ";
+        f.buffer.append(@str);
+
+        let mut index: usize = 0;
+        while index < self.m_cards.len() {
+            let str: ByteArray = format!("{0}\n", self.m_cards.at(index));
+            f.buffer.append(@str);
+            index += 1;
+        };
+
+        return Result::Ok(());
+    }
+}
+
 impl StructAssetDisplay of Display<StructAsset> {
     fn fmt(self: @StructAsset, ref f: Formatter) -> Result<(), Error> {
         let str: ByteArray = format!("Asset: {0}, Value: {1}, Copies Left: {2}",
@@ -886,41 +902,6 @@ impl PlayerImpl of IPlayer {
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
-enum EnumGameState {
-    WaitingForPlayers: (),
-    Started: ()
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
-enum EnumPlayerState {
-    NotJoined: (),
-    Joined: (),
-    TurnStarted: (),
-    DrawnCards: (),
-    TurnEnded: (),
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
-enum EnumMoveError {
-    CardAlreadyPresent: (),
-    CardNotFound: (),
-    NotEnoughMoves: (),
-    TooManyCardsHeld: (),
-    SetAlreadyPresent: ()
-}
-
-#[derive(Drop, Serde, Clone, PartialEq, Introspect, Debug)]
-enum EnumCard {
-    Asset: StructAsset,
-    Blockchain: StructBlockchain,
-    Claim: StructGasFee,  // Make other player(s) pay you a fee.
-    Deny: StructMajorityAttack,  // Deny and avoid performing the action imposed.
-    Draw: StructDraw, // Draw two additional cards.
-    StealBlockchain: StructBlockchain,  // Steal a single Blockchain from a player's deck.
-    StealAssetGroup: StructAssetGroup,  // Steal Asset Group from another player.
-}
-
 #[derive(Drop, Serde, Clone, PartialEq, Introspect, Debug)]
 enum EnumBlockchainType {
     All: (),
@@ -934,4 +915,39 @@ enum EnumBlockchainType {
     Purple: (),
     Red: (),
     Yellow: ()
+}
+
+#[derive(Drop, Serde, Clone, PartialEq, Introspect, Debug)]
+enum EnumCard {
+    Asset: StructAsset,
+    Blockchain: StructBlockchain,
+    Claim: StructGasFee,  // Make other player(s) pay you a fee.
+    Deny: StructMajorityAttack,  // Deny and avoid performing the action imposed.
+    Draw: StructDraw, // Draw two additional cards.
+    StealBlockchain: StructBlockchain,  // Steal a single Blockchain from a player's deck.
+    StealAssetGroup: StructAssetGroup,  // Steal Asset Group from another player.
+}
+
+#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
+enum EnumGameState {
+    WaitingForPlayers: (),
+    Started: ()
+}
+
+#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
+enum EnumMoveError {
+    CardAlreadyPresent: (),
+    CardNotFound: (),
+    NotEnoughMoves: (),
+    TooManyCardsHeld: (),
+    SetAlreadyPresent: ()
+}
+
+#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
+enum EnumPlayerState {
+    NotJoined: (),
+    Joined: (),
+    TurnStarted: (),
+    DrawnCards: (),
+    TurnEnded: (),
 }

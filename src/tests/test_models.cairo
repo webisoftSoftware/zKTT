@@ -13,7 +13,7 @@
 #[cfg(test)]
 mod tests {
     use starknet::{ContractAddress, get_caller_address, get_block_timestamp};
-    use zktt::models::{ComponentGame, ComponentDeck, ComponentDealer,
+    use zktt::models::components::{ComponentGame, ComponentDeck, ComponentDealer,
          ComponentHand, ComponentMoneyPile, ComponentPlayer, EnumGameState, EnumMoveError,
           EnumCard, EnumPlayerState, EnumBlockchainType,
            IBlockchain, IDeck, IDealer, IGame, IPlayer, IHand, IAsset};
