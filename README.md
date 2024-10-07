@@ -1,22 +1,19 @@
+<a href="https://zktable.top"><img src="assets/zktt_transparent.png" alt="zkTT logo" align="right" style="width:84px;"></a>
+
 [![CI](https://github.com/webisoftSoftware/zktt/actions/workflows/test.yaml/badge.svg)](https://github.com/webisoftSoftware/zktt/actions/workflows/test.yaml)
 
+## zKTT - Cairo Contracts
 
-<a href="https://zktable.top"><img src="assets/zktt_transparent.png" alt="zkTT logo" style="width:400px;"></a>
+### Instructions to run locally:
 
-# zKTT - Cairo Contracts
-### Running Locally
-
-
----
-
-#### Terminal one (Make sure this is running)
+#### Terminal #1 (Make sure this is running)
 
 ```bash
 # Run Katana
 katana --disable-fee --allowed-origins "*"
 ```
 
-#### Terminal two
+#### Terminal #2
 
 ```bash
 # Build the contracts
@@ -32,7 +29,7 @@ sozo migrate apply
 sozo execute --world <world-hash> table <system-name> (i.e start)
 ```
 
-#### Terminal three
+#### Terminal #3
 ```bash
 # Start Torii
 torii --world <world-hash> --allowed-origins "*"
