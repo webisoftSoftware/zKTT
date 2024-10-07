@@ -1,14 +1,34 @@
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-/////////////////////            ____________  /////////////////////////
-////////////////////    ___| |/ /_   _|_   _| //////////////////////////
-////////////////////   |_  / ' /  | |   | |   //////////////////////////
-////////////////////    / /| . \  | |   | |   //////////////////////////
-////////////////////   /___|_|\_\ |_|   |_|   //////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////            ____________ //////////////////////////////////////
+/////////////////////////////////////   ___| |/ /_   _|_   _| //////////////////////////////////////
+/////////////////////////////////////  |_  / ' /  | |   | |   //////////////////////////////////////
+/////////////////////////////////////   / /| . \  | |   | |   //////////////////////////////////////
+/////////////////////////////////////  /___|_|\_\ |_|   |_|   //////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Copyright (c) 2024 zkTT
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the Software
+// is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use starknet::ContractAddress;
 use core::fmt::{Display, Formatter, Error};
@@ -19,16 +39,16 @@ use core::fmt::{Display, Formatter, Error};
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 
-/// Component that represents the Pile of cards in the middle of the board, not owned by any player
-/// yet.
+/// Component that represents the card itself, useful for determining the rightful owner.
 ///
-/// Per table.
+/// Per card in deck.
 #[derive(Drop, Serde, Clone, Debug)]
 #[dojo::model]
 struct ComponentCard {
     #[key]
     m_ent_owner: ContractAddress,
-    m_type: EnumCard
+    m_type: EnumCard,
+    m_is_owner: bool
 }
 
 /// Component that represents the Pile of cards in the middle of the board, not owned by any player
@@ -51,7 +71,7 @@ struct ComponentDealer {
 struct ComponentDeck {
     #[key]
     m_ent_owner: ContractAddress,
-    m_blockchains: Array<StructBlockchain>,
+    m_blockchains: Array<EnumCard>,
 }
 
 /// Component that represents the game state and acts as storage to keep track of the number of
@@ -86,7 +106,7 @@ struct ComponentHand {
 struct ComponentMoneyPile {
     #[key]
     m_ent_owner: ContractAddress,
-    m_cards: Array<StructAsset>,
+    m_cards: Array<EnumCard>,
     m_total_value: u8
 }
 
@@ -103,7 +123,8 @@ struct ComponentPlayer {
     m_moves_remaining: u8,
     m_score: u32,
     m_sets: u8,
-    m_state: EnumPlayerState
+    m_state: EnumPlayerState,
+    m_in_debt: Option<u8>
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -157,11 +178,17 @@ struct StructGasFee {
     m_players_affected: Array<ContractAddress>,
     // If there is no Blockchain specified, it can be applied to any Blockchain.
     m_blockchain_type_affected: EnumBlockchainType,
-    m_multiplier: Array<u8>,
+    m_boost: Array<u8>,
     m_count: u8,  // How many Blockchains stacked.
-    m_fee_per_player: u8,
     m_value: u8,
     m_copies_left: u8
+}
+
+/// Specify where to move a card.
+#[derive(Drop, Serde, Clone, Introspect, Debug)]
+struct StructLocation {
+    m_location_addr: ContractAddress,
+    m_location: EnumLocation
 }
 
 /// Steal an asset group from an opponent.
@@ -455,7 +482,8 @@ impl EnumCardInto of Into<EnumCard, ByteArray> {
             EnumCard::Deny(_) => "Say No",
             EnumCard::Draw(_) => "Draw Two",
             EnumCard::StealBlockchain(bc_struct) => format!("{0}", bc_struct.m_name),
-            EnumCard::StealAssetGroup(asset_group_struct) => format!("Asset Group {0}", asset_group_struct.into()),
+            EnumCard::StealAssetGroup(asset_group_struct) => format!("Asset Group {0}",
+             asset_group_struct.into()),
         };
     }
 }
@@ -492,7 +520,8 @@ impl StructAssetGroupImpl of IAssetGroup {
 
 #[generate_trait]
 impl StructBlockchainImpl of IBlockchain {
-    fn new(owner: ContractAddress, name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8, copies_left: u8) -> StructBlockchain {
+    fn new(owner: ContractAddress, name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8,
+        copies_left: u8) -> StructBlockchain {
         return StructBlockchain {
             m_owner: owner,
             m_name: name,
@@ -500,6 +529,17 @@ impl StructBlockchainImpl of IBlockchain {
             m_fee: fee,
             m_value: value,
             m_copies_left: copies_left
+        };
+    }
+}
+
+#[generate_trait]
+impl CardImpl of ICard {
+    fn new(owner: ContractAddress, card: EnumCard) -> ComponentCard {
+        return ComponentCard {
+            m_ent_owner: owner,
+            m_type: card,
+            m_is_owner: true
         };
     }
 }
@@ -535,7 +575,7 @@ impl DealerImpl of IDealer {
 
 #[generate_trait]
 impl DeckImpl of IDeck {
-    fn add(ref self: ComponentDeck, mut bc: StructBlockchain) -> Result<(), EnumMoveError> {
+    fn add(ref self: ComponentDeck, mut bc: EnumCard) -> Result<(), EnumMoveError> {
         if let Option::Some(_) = self.contains(@bc.m_name) {
             return Result::Err(EnumMoveError::CardAlreadyPresent);
         }
@@ -544,13 +584,13 @@ impl DeckImpl of IDeck {
         return Result::Ok(());
     }
 
-    fn contains(ref self: ComponentDeck, bc_name: @ByteArray) -> Option<usize> {
+    fn contains(ref self: ComponentDeck, bc_name: @EnumCard) -> Option<usize> {
         let mut index = 0;
         let mut found = Option::None;
 
         while index < self.m_blockchains.len() {
             if let Option::Some(bc_found) = self.m_blockchains.get(index) {
-                if bc_name == bc_found.unbox().m_name {
+                if bc_name == bc_found.unbox() {
                     found = Option::Some(index);
                     break;
                 }
@@ -574,7 +614,7 @@ impl DeckImpl of IDeck {
         return found;
     }
 
-    fn remove(ref self: ComponentDeck, card_name: @ByteArray) -> () {
+    fn remove(ref self: ComponentDeck, card_name: @EnumCard) -> () {
         if let Option::Some(index_found) = self.contains(card_name) {
             let mut new_array = ArrayTrait::new();
 
@@ -657,7 +697,7 @@ impl DeckImpl of IDeck {
 }
 
 #[generate_trait]
-impl CardImpl of IEnumCard {
+impl EnumCardImpl of IEnumCard {
     fn get_owner(self: @EnumCard) -> @ContractAddress {
         return match self {
             EnumCard::Asset(data) => {
@@ -724,6 +764,72 @@ impl CardImpl of IEnumCard {
             }
         };
     }
+
+    fn get_name(self: @EnumCard) -> ByteArray {
+        return match self {
+            EnumCard::Asset(data) => {
+                return data.m_name.clone();
+            },
+            EnumCard::Blockchain(data) => {
+                return data.m_name.clone();
+            },
+            EnumCard::Claim(_) => {
+                return "Gas Fee";
+            },
+            EnumCard::Deny(_) => {
+                return "Say No";
+            },
+            EnumCard::Draw(_) => {
+                return "Priority Fee";
+            },
+            EnumCard::StealBlockchain(_) => {
+                return "Frontrun";
+            },
+            EnumCard::StealAssetGroup(_) => {
+                return "51% Attack";
+            }
+        };
+    }
+
+    fn get_value(self: @EnumCard) -> u8 {
+        return match self {
+            EnumCard::Asset(data) => {
+                return data.m_value;
+            },
+            EnumCard::Blockchain(data) => {
+                return data.m_value;
+            },
+            EnumCard::Claim(data) => {
+                return data.m_value;
+            },
+            EnumCard::Deny(data) => {
+                return data.m_value;
+            },
+            EnumCard::Draw(data) => {
+                return data.m_value;
+            },
+            EnumCard::StealBlockchain(data) => {
+                return data.m_value;
+            },
+            EnumCard::StealAssetGroup(data) => {
+                return data.m_value;
+            }
+        };
+    }
+
+    fn is_asset(self: @EnumCard) -> bool {
+        return match self {
+            EnumCard::Asset(_) => true,
+            _ => false
+        };
+    }
+
+    fn is_blockchain(self: @EnumCard) -> bool {
+        return match self {
+            EnumCard::Blockchain(_) => true,
+            _ => false
+        };
+    }
 }
 
 #[generate_trait]
@@ -768,6 +874,33 @@ impl GameImpl of IGame {
                 index += 1;
             };
         }
+    }
+}
+
+#[generate_trait]
+impl GasFeeImpl of IGasFee {
+    fn new(owner: ContractAddress, name: ByteArray, players: Array<ContractAddress>,
+        bc_affected: EnumBlockchainType, boost: Array<u8>, count: Option<u8>, value: u8,
+        copies_left: u8) -> StructGasFee {
+        return StructGasFee {
+            m_owner: owner,
+            m_name: name,
+            m_players_affected: players,
+            // If there is no Blockchain specified, it can be applied to any Blockchain.
+            m_blockchain_type_affected: bc_affected,
+            m_boost: boost,
+            m_count: count,  // How many Blockchains stacked.
+            m_value: value,
+            m_copies_left: copies_left
+        };
+    }
+
+    fn get_fee(self: @StructGasFee) -> Option<u8> {
+        if self.m_count.is_none() {
+            return Option::None;
+        }
+
+        return *self.m_boost.at(self.m_count.clone().unwrap());
     }
 }
 
@@ -836,14 +969,16 @@ impl MoneyPileImpl of IMoney {
         };
     }
 
-    fn add(ref self: ComponentMoneyPile, mut card: StructAsset) -> () {
+    fn add(ref self: ComponentMoneyPile, mut card: EnumCard) -> () {
+        assert!(!card.is_blockchain(), "Blockchains cannot be added to money pile");
+
         card.m_owner = self.m_ent_owner;
-        self.m_total_value += card.m_value;
+        self.m_total_value += card.get_value();
         self.m_cards.append(card);
         return ();
     }
 
-    fn contains(ref self: ComponentMoneyPile, card: @StructAsset) -> Option<usize> {
+    fn contains(ref self: ComponentMoneyPile, card: @EnumCard) -> Option<usize> {
         let mut index: usize = 0;
 
         return loop {
@@ -859,7 +994,7 @@ impl MoneyPileImpl of IMoney {
         };
     }
 
-    fn remove(ref self: ComponentMoneyPile, card: @StructAsset) -> () {
+    fn remove(ref self: ComponentMoneyPile, card: @EnumCard) -> () {
         if let Option::Some(index_found) = self.contains(card) {
             self.m_total_value -= *card.m_value;
             let mut new_array: Array<StructAsset> = ArrayTrait::new();
@@ -891,8 +1026,13 @@ impl PlayerImpl of IPlayer {
             m_moves_remaining: 3,
             m_score: 0,
             m_sets: 0,
-            m_state: EnumPlayerState::TurnEnded
+            m_state: EnumPlayerState::TurnEnded,
+            m_in_debt: Option::None
         };
+    }
+
+    fn get_debt(self: @ComponentPlayer) -> Option<u8> {
+        return self.m_in_debt.clone();
     }
 }
 
@@ -935,6 +1075,12 @@ enum EnumGameState {
 }
 
 #[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
+enum EnumLocation {
+    MoneyPile: (),
+    Deck: ()
+}
+
+#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
 enum EnumMoveError {
     CardAlreadyPresent: (),
     CardNotFound: (),
@@ -947,7 +1093,7 @@ enum EnumMoveError {
 enum EnumPlayerState {
     NotJoined: (),
     Joined: (),
-    TurnStarted: (),
     DrawnCards: (),
+    TurnStarted: (),
     TurnEnded: (),
 }

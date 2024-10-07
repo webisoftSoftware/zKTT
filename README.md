@@ -16,8 +16,14 @@
 katana --disable-fee --allowed-origins "*"
 ```
 
-#### Terminal two
+#### Terminal two (Make sure this is running)
 
+```bash
+# Start Torii
+torii --world <world-hash> --allowed-origins "*"
+```
+
+#### Terminal three
 ```bash
 # Build the contracts
 sozo build
@@ -25,17 +31,19 @@ sozo build
 # Load models and systems onto katana.
 sozo migrate apply
 
-# Join with two example accounts.
+# Join with two different example accounts.
 ./join.sh
 
 # Interact with the world and the systems.
-sozo execute --world <world-hash> table <system-name> (i.e start)
-```
 
-#### Terminal three
-```bash
-# Start Torii
-torii --world <world-hash> --allowed-origins "*"
+## Without call data:
+sozo execute table <system-name> (i.e start)
+
+## With call data:
+sozo execute table <system-name> (i.e start) -c [...params deserialized]
+
+# Example (with call data):
+sozo execute table play -c 0,<owner_addr>,str:<asset_name>,<value>,<copies_left>
 ```
 
 ---
