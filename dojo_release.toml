@@ -1,16 +1,14 @@
 [world]
-name = "Zero Knowledge Table Top"
-description = "Zero Knowledge table top multiplayer game on chain from 2 to 5 players."
+name = "zkTT"
+description = "Powered by Starknet and Dojo"
 cover_uri = "file://assets/cover.png"
 icon_uri = "file://assets/icon.png"
-website = "https://zktable.top/lander"
+website = "https://zktable.top/"
 seed = "zktt"
 
 [world.socials]
-x = "https://x.com/ohayo_dojo"
-discord = "https://discord.gg/FB2wR6uF"
-github = "https://github.com/dojoengine/dojo-starter"
-telegram = "https://t.me/dojoengine"
+x = "https://x.com/zktabletop"
+github = "https://github.com/webisoftSoftware"
 
 [namespace]
 default = "zktt"

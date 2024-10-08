@@ -1,3 +1,5 @@
 target
 manifests/*
 .idea/
+dojo_dev.toml
+dojo_release.toml
