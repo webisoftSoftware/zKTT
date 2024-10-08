@@ -1,17 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////   _______  _       __________________  /////////////////////////////
-///////////////////////////////  / ___   )| \    /\\__   __/\__   __/  /////////////////////////////
-///////////////////////////////  \/   )  ||  \  / /   ) (      ) (     /////////////////////////////
-///////////////////////////////      /   )|  (_/ /    | |      | |     /////////////////////////////
-///////////////////////////////     /   / |   _ (     | |      | |     /////////////////////////////
-///////////////////////////////    /   /  |  ( \ \    | |      | |     /////////////////////////////
-///////////////////////////////   /   (_/\|  /  \ \   | |      | |     /////////////////////////////
-///////////////////////////////  (_______/|_/    \/   )_(      )_(     /////////////////////////////
-///////////////////////////////                                        /////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////  ______  __  __   ______  ______   ////////////////////////////////
+//////////////////////////////// /\___  \/\ \/ /  /\__  _\/\__  _\  ////////////////////////////////
+//////////////////////////////// \/_/  /_\ \  _`-.\/_/\ \/\/_/\ \/  ////////////////////////////////
+////////////////////////////////   /\_____\ \_\ \_\  \ \_\   \ \_\  ////////////////////////////////
+////////////////////////////////   \/_____/\/_/\/_/   \/_/    \/_/  ////////////////////////////////
+////////////////////////////////                                    ////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2024 zkTT
 //
@@ -67,6 +60,60 @@ mod table {
     ////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
+    /// Only run once when contract is deployed.
+    fn dojo_init(ref world: IWorldDispatcher) {
+       // Step 1: Create cards and put them in a container in order.
+       let cards_in_order: Array<EnumCard> =
+       array![EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [1]", 1, 6)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [2]", 2, 5)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [3]", 3, 3)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [4]", 4, 3)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [5]", 5, 2)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [10]", 10, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Aptos", EnumBlockchainType::Grey, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Arbitrum", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Avalanche", EnumBlockchainType::Red, 2, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Base", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Bitcoin", EnumBlockchainType::Gold, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Blast", EnumBlockchainType::Yellow,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Canto", EnumBlockchainType::Green, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Celestia", EnumBlockchainType::Purple,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Celo", EnumBlockchainType::Yellow,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Cosmos", EnumBlockchainType::Blue, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Dogecoin", EnumBlockchainType::Gold, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Ethereum", EnumBlockchainType::DarkBlue, 3, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Fantom", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Gnosis Chain", EnumBlockchainType::Green, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Kava", EnumBlockchainType::Red, 2, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Linea", EnumBlockchainType::Grey, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Metis", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Near", EnumBlockchainType::Green, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Optimism", EnumBlockchainType::Red, 2, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Osmosis", EnumBlockchainType::Pink, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Polkadot", EnumBlockchainType::Pink, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Polygon", EnumBlockchainType::Purple, 2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Scroll", EnumBlockchainType::Yellow, 2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Solana", EnumBlockchainType::Purple,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Taiko", EnumBlockchainType::Pink, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Ton", EnumBlockchainType::Blue, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "ZKSync", EnumBlockchainType::Grey, 1, 2, 1))
+        ];
+
+       let dealer: ComponentDealer = IDealer::new(world.contract_address, cards_in_order);
+
+       // Step 2: Register all these cards initially in the world for dealer as the owner.
+       let mut index: usize = 0;
+       while index < dealer.m_cards.len() {
+           // Register the card's new owner.
+           let card = dealer.m_cards.at(index);
+           set!(world, (ICard::new(world.contract_address, card.clone())));
+           index += 1;
+       };
+
+       set!(world, (dealer));
+    }
+
     #[abi(embed_v0)]
     impl ITableImpl of ITable<ContractState> {
         fn join(ref world: IWorldDispatcher, username: ByteArray) -> () {
@@ -91,7 +138,12 @@ mod table {
 
             game.m_state = EnumGameState::Started;
 
-            let mut dealer: ComponentDealer = IDealer::new(world.contract_address, create_cards(@seed));
+            // Step 2: Create another container with shuffled cards using seed and pseudo-random algorithm.
+            let seed: felt252 = generate_seed(@world.contract_address, @game.m_players);
+            let mut dealer = get!(world, (world.contract_address), (ComponentDealer));
+            dealer.shuffle(seed);
+
+            // Step 3: Distribute 5 cards per player by drawing from the dealer's deck.
             let mut world_ref = world;
             distribute_cards(ref world_ref, ref game.m_players, ref dealer.m_cards);
             set!(world, (dealer, game));
@@ -104,7 +156,8 @@ mod table {
 
             let mut player = get!(world, get_caller_address(), (ComponentPlayer));
             assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state == EnumPlayerState::TurnEnded, "Player has already started turn");
+            assert!(player.m_state == EnumPlayerState::TurnEnded ||
+                player.m_state == EnumPlayerState::Joined, "Player has already started turn");
             player.m_state = EnumPlayerState::TurnStarted;
             set!(world, (player));
         }
@@ -117,7 +170,7 @@ mod table {
 
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
             assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
+            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not player's turn");
             assert!(player.m_moves_remaining == 3, "Cannot draw mid-turn");
 
             let mut dealer = get!(world, (seed), ComponentDealer);
@@ -132,7 +185,7 @@ mod table {
                     }
 
                     let card = dealer.pop_card().unwrap();
-                    register_owner(ref ref_world, card.clone(), get_caller_address());
+                    register_card(ref ref_world, card.clone(), get_caller_address());
 
                     hand.add(card);
                 };
@@ -153,6 +206,8 @@ mod table {
             // Draw two cards.
             hand.add(card1_opt.unwrap());
             hand.add(card2_opt.unwrap());
+            player.m_state = EnumPlayerState::DrawnCards;
+            set!(world, (hand, dealer, player));
         }
 
         fn play(ref world: IWorldDispatcher, card: EnumCard) -> () {
@@ -166,7 +221,7 @@ mod table {
             assert!(player.m_moves_remaining != 0, "No moves left");
 
             let mut world_cpy = world;
-            assert!(is_owner(ref world_cpy, @card, @get_caller_address()), "Player does not own card");
+            assert!(is_owner(@world_cpy, @card, @get_caller_address()), "Player does not own card");
             use_card(ref world_cpy, @get_caller_address(), card);
 
             player.m_moves_remaining -= 1;
@@ -184,7 +239,7 @@ mod table {
             assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
 
             let mut world_cpy = world;
-            assert!(is_owner(ref world_cpy, @card, @get_caller_address()), "Player does not own card");
+            assert!(is_owner(@world_cpy, @card, @get_caller_address()), "Player does not own card");
             // TODO: Move card around in deck.
             set!(world, (player));
             return ();
@@ -239,8 +294,16 @@ mod table {
             let player = get!(world, (get_caller_address()), (ComponentPlayer));
             assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
 
+            let (mut hand, mut deck, mut deposit) = get!(world, (player.m_ent_owner), (ComponentHand,
+            ComponentDeck, ComponentDeposit));
+
+            // TODO: Cleanup after player by setting all card owner's to 0.
+            // hand.discard_cards();
+            // deck.discard_cards();
+            // deposit.discard_cards();
+
             game.remove_player(@get_caller_address());
-            delete!(world, (player));
+            delete!(world, (player, hand, deck, deposit));
             set!(world, (game));
             return ();
         }
@@ -321,153 +384,73 @@ mod table {
             },
             _ => panic!("Invalid or illegal move!")
         };
+
+
         return ();
     }
 
     fn generate_seed(world_address: @ContractAddress, players: @Array<ContractAddress>) -> felt252 {
-        // TODO: Generate random ordered card components for the beginning of the game.
-        return (get_block_timestamp() * players.len().into() * 31).into();
+        let mut seed: felt252 = 0;
+
+        let mut index: usize = 0;
+        while index < players.len() {
+            seed += get_block_timestamp().into();
+            index += 1;
+        };
+        seed *= players.len().into();
+        return seed;
     }
 
-    fn create_cards(world_address: @ContractAddress) -> Array<EnumCard> {
-        let mut container = ArrayTrait::new();
+    fn create_cards(ref world: IWorldDispatcher) -> () {
+        // Step 1: Create cards and put them in a container in order.
+       let cards_in_order: Array<EnumCard> =
+       array![EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [1]", 1, 6)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [2]", 2, 5)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [3]", 3, 3)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [4]", 4, 3)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [5]", 5, 2)),
+       EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [10]", 10, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Aptos", EnumBlockchainType::Grey, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Arbitrum", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Avalanche", EnumBlockchainType::Red, 2, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Base", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Bitcoin", EnumBlockchainType::Gold, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Blast", EnumBlockchainType::Yellow,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Canto", EnumBlockchainType::Green, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Celestia", EnumBlockchainType::Purple,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Celo", EnumBlockchainType::Yellow,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Cosmos", EnumBlockchainType::Blue, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Dogecoin", EnumBlockchainType::Gold, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Ethereum", EnumBlockchainType::DarkBlue, 3, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Fantom", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Gnosis Chain", EnumBlockchainType::Green, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Kava", EnumBlockchainType::Red, 2, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Linea", EnumBlockchainType::Grey, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Metis", EnumBlockchainType::LightBlue, 1, 2, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Near", EnumBlockchainType::Green, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Optimism", EnumBlockchainType::Red, 2, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Osmosis", EnumBlockchainType::Pink, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Polkadot", EnumBlockchainType::Pink, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Polygon", EnumBlockchainType::Purple, 2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Scroll", EnumBlockchainType::Yellow, 2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Solana", EnumBlockchainType::Purple,  2, 3, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Taiko", EnumBlockchainType::Pink, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "Ton", EnumBlockchainType::Blue, 1, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new(Option::Some(world.contract_address), "ZKSync", EnumBlockchainType::Grey, 1, 2, 1))
+        ];
 
-        // ASSET CARDS
-        let asset = IAsset::new(*world_address, "ETH [1]", 1, 6);
-        container.append(EnumCard::Asset(asset));
+       let dealer: ComponentDealer = IDealer::new(world.contract_address, cards_in_order);
 
-        let blockchain = IBlockchain::new(*world_address, "Base", EnumBlockchainType::LightBlue, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
+       // Step 2: Register all these cards initially in the world for dealer as the owner.
+       let mut index: usize = 0;
+       while index < dealer.m_cards.len() {
+           // Register the card's new owner.
+           set!(world, (ICard::new(world.contract_address, dealer.m_cards.at(index).clone())));
+           index += 1;
+       };
 
-        let blockchain = IBlockchain::new(*world_address, "Arbitrum", EnumBlockchainType::LightBlue, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        let asset = IAsset::new(*world_address, "ETH [10]", 10, 1);
-        container.append(EnumCard::Asset(asset));
-
-        let blockchain = IBlockchain::new(*world_address, "Gnosis Chain", EnumBlockchainType::Green, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        let asset = IAsset::new(*world_address, "ETH [2]", 2, 5);
-        container.append(EnumCard::Asset(asset));
-
-        let blockchain = IBlockchain::new(*world_address, "Blast", EnumBlockchainType::Yellow,  2, 3, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        let blockchain = IBlockchain::new(*world_address, "Celestia", EnumBlockchainType::Purple,  2, 3, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        let asset = IAsset::new(*world_address, "ETH [5]", 5, 2);
-        container.append(EnumCard::Asset(asset));
-
-        let asset = IAsset::new(*world_address, "ETH [4]", 4, 3);
-        container.append(EnumCard::Asset(asset));
-
-        // Fantom
-        let blockchain = IBlockchain::new(*world_address, "Fantom", EnumBlockchainType::LightBlue, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        let asset = IAsset::new(*world_address, "ETH [3]", 3, 3);
-        container.append(EnumCard::Asset(asset));
-
-        // Metis
-        let blockchain = IBlockchain::new(*world_address, "Metis", EnumBlockchainType::LightBlue, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // GREEN
-        // Canto
-        let blockchain = IBlockchain::new(*world_address, "Canto", EnumBlockchainType::Green, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Near
-        let blockchain = IBlockchain::new(*world_address, "Near", EnumBlockchainType::Green, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // RED
-        // Avalanche
-        let blockchain = IBlockchain::new(*world_address, "Avalanche", EnumBlockchainType::Red, 2, 4, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Kava
-        let blockchain = IBlockchain::new(*world_address, "Kava", EnumBlockchainType::Red, 2, 4, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Optimism
-        let blockchain = IBlockchain::new(*world_address, "Optimism", EnumBlockchainType::Red, 2, 4, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Grey
-        // ZKSync
-        let blockchain = IBlockchain::new(*world_address, "ZKSync", EnumBlockchainType::Grey, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Linea
-        let blockchain = IBlockchain::new(*world_address, "Linea", EnumBlockchainType::Grey, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Aptos
-        let blockchain = IBlockchain::new(*world_address, "Aptos", EnumBlockchainType::Grey, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // YELLOW
-        // Scroll
-        let blockchain = IBlockchain::new(*world_address, "Scroll", EnumBlockchainType::Yellow, 2, 3, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Celo
-        let blockchain = IBlockchain::new(*world_address, "Celo", EnumBlockchainType::Yellow,  2, 3, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // PURPLE
-        // Polygon
-        let blockchain = IBlockchain::new(*world_address, "Polygon", EnumBlockchainType::Purple, 2, 3, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Solana
-        let blockchain = IBlockchain::new(*world_address, "Solana", EnumBlockchainType::Purple,  2, 3, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // PINK
-        // Polkadot
-        let blockchain = IBlockchain::new(*world_address, "Polkadot", EnumBlockchainType::Pink, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Osmosis
-        let blockchain = IBlockchain::new(*world_address, "Osmosis", EnumBlockchainType::Pink, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Taiko
-        let blockchain = IBlockchain::new(*world_address, "Taiko", EnumBlockchainType::Pink, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // BLUE
-        // Cosmos
-        let blockchain = IBlockchain::new(*world_address, "Cosmos", EnumBlockchainType::Blue, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Ton
-        let blockchain = IBlockchain::new(*world_address, "Ton", EnumBlockchainType::Blue, 1, 1, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // DARK BLUE
-        // Starknet
-        let blockchain = IBlockchain::new(*world_address, "Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Ethereum
-        let blockchain = IBlockchain::new(*world_address, "Ethereum", EnumBlockchainType::DarkBlue, 3, 4, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // GOLD
-        // Bitcoin
-        let blockchain = IBlockchain::new(*world_address, "Bitcoin", EnumBlockchainType::Gold, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-
-        // Dogecoin
-        let blockchain = IBlockchain::new(*world_address, "Dogecoin", EnumBlockchainType::Gold, 1, 2, 1);
-        container.append(EnumCard::Blockchain(blockchain));
-        
-        return container;
+       set!(world, (dealer));
     }
 
     fn distribute_cards(ref world: IWorldDispatcher, ref players: Array<ContractAddress>,
@@ -488,7 +471,6 @@ mod table {
                 if let Option::Some(card_given) = cards.pop_front() {
                     player_hand.add(card_given);
                 }
-
                 index += 1;
             };
 
@@ -496,17 +478,22 @@ mod table {
         };
     }
 
-    fn is_owner(ref world: IWorldDispatcher, card: @EnumCard, caller: @ContractAddress) -> bool {
-        let card_component = get!(world, (*caller), (ComponentCard));
-        return card.get_owner() == caller && card_component.m_is_owner;
+    fn is_owner(world: @IWorldDispatcher, card: @EnumCard, caller: @ContractAddress) -> bool {
+        let card_component = get!(*world, (*caller), (ComponentCard));
+        if card.get_owner().is_none() {
+            return false;
+        }
+
+        return card.get_owner().unwrap() == @card_component.m_ent_owner;
     }
 
-    fn register_owner(ref world: IWorldDispatcher, card: EnumCard, caller: ContractAddress) -> () {
+    fn register_card(ref world: IWorldDispatcher, card: EnumCard, owner: ContractAddress) -> () {
         // Register the card's new owner.
-        set!(world, (ICard::new(get_caller_address(), card)));
+        set!(world, (ICard::new(owner, card)));
     }
 
-    fn shuffle(ref world: IWorldDispatcher) -> () {
-        return ();
+    fn discard_card(ref world: IWorldDispatcher, card: EnumCard) -> () {
+        // Register the card's new owner.
+        set!(world, (ICard::new(starknet::contract_address_const::<0x0>(), card)));
     }
 }

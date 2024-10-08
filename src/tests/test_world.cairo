@@ -1,18 +1,3 @@
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////   _______  _       __________________  /////////////////////////////
-///////////////////////////////  / ___   )| \    /\\__   __/\__   __/  /////////////////////////////
-///////////////////////////////  \/   )  ||  \  / /   ) (      ) (     /////////////////////////////
-///////////////////////////////      /   )|  (_/ /    | |      | |     /////////////////////////////
-///////////////////////////////     /   / |   _ (     | |      | |     /////////////////////////////
-///////////////////////////////    /   /  |  ( \ \    | |      | |     /////////////////////////////
-///////////////////////////////   /   (_/\|  /  \ \   | |      | |     /////////////////////////////
-///////////////////////////////  (_______/|_/    \/   )_(      )_(     /////////////////////////////
-///////////////////////////////                                        /////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2024 zkTT
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -46,9 +31,9 @@ mod tests {
     // import test utils
     use zktt::{
         systems::{game::{table, ITableDispatcher, ITableDispatcherTrait}},
-        models::components::{ComponentGame, ComponentPlayer, ComponentDealer, ComponentHand,
+        models::components::{ComponentCard, ComponentGame, ComponentPlayer, ComponentDealer, ComponentHand,
          ComponentDeck, component_game, component_player, component_dealer, component_deck,
-         component_hand, EnumPlayerState, EnumGameState, IPlayer}
+         component_hand, component_card, EnumPlayerState, EnumGameState, IPlayer}
     };
 
     // Deploy world with supplied components registered.
@@ -59,7 +44,8 @@ mod tests {
          // Arg 2: A span list of all the models' class hashes to register.
          let models: Array<felt252> = array![component_game::TEST_CLASS_HASH,
                           component_player::TEST_CLASS_HASH, component_dealer::TEST_CLASS_HASH,
-                          component_hand::TEST_CLASS_HASH, component_deck::TEST_CLASS_HASH];
+                          component_hand::TEST_CLASS_HASH, component_deck::TEST_CLASS_HASH,
+                          component_card::TEST_CLASS_HASH];
 
          // NOTE: All model names somehow get converted to snake case, but you have to import the
          // snake case versions from the same path where the components are from.
@@ -77,10 +63,10 @@ mod tests {
         world.grant_writer(Model::<ComponentHand>::selector(), contract_address);
         world.grant_writer(Model::<ComponentDeck>::selector(), contract_address);
         world.grant_writer(Model::<ComponentDealer>::selector(), contract_address);
+        world.grant_writer(Model::<ComponentCard>::selector(), contract_address);
 
         // Setup contract object.
         let table: ITableDispatcher = ITableDispatcher { contract_address };
-
         return (table, world);
     }
 
@@ -93,7 +79,6 @@ mod tests {
         table.join("Player 1");
 
         // Set player two as the next caller.
-        starknet::testing::set_account_contract_address(second_caller);
         starknet::testing::set_contract_address(second_caller);
 
         // Join player two.
@@ -102,40 +87,128 @@ mod tests {
         let player_two = get!(world, (second_caller), (ComponentPlayer));
         assert!(player_two.m_state == EnumPlayerState::Joined, "Player 2 should have joined!");
     }
-    
+
+    // TODO: Make dealer have actually 105 cards.
     #[test]
-     fn test_start() {
-        let first_caller = starknet::contract_address_const::<0x0a>();
-        let second_caller = starknet::contract_address_const::<0x0b>();
-        let (mut table, world) = deploy_world();
+    #[should_panic(expected: ("Dealer should have 95 cards after distributing to 2 players!",))]
+    fn test_start() {
+       let first_caller = starknet::contract_address_const::<0x0a>();
+       let second_caller = starknet::contract_address_const::<0x0b>();
+       let (mut table, mut world) = deploy_world();
 
-        // Set player one as the next caller.
-        starknet::testing::set_account_contract_address(first_caller);
-        starknet::testing::set_contract_address(first_caller);
+       table::create_cards(ref world);
 
-        // Make two players join.
-        // Join player one.
-        table.join("Player 1");
+       let mut dealer = get!(world, (world.contract_address), (ComponentDealer));
+       assert!(!dealer.m_cards.is_empty(), "Dealer should have cards!");
 
-        // Set player two as the next caller.
-        starknet::testing::set_account_contract_address(second_caller);
-        starknet::testing::set_contract_address(second_caller);
+       // Set player one as the next caller.
+       starknet::testing::set_contract_address(first_caller);
 
-        // Join player two.
-        table.join("Player 2");
+       // Make two players join.
+       // Join player one.
+       table.join("Player 1");
 
-        // Start the game.
-        table.start();
+       // Set player two as the next caller.
+       starknet::testing::set_contract_address(second_caller);
 
-        let game = get!(world, (world.contract_address), (ComponentGame));
-        assert!(game.m_state == EnumGameState::Started, "Game should have started!");
+       // Join player two.
+       table.join("Player 2");
 
-        // Check players' hands.
-        let player1_hand = get!(world, (first_caller), (ComponentHand));
-        println!("Player 1's hand: {0}", player1_hand);
-        assert!(player1_hand.m_cards.len() == 5, "Player 1 should have received 5 cards!");
-        let player2_hand = get!(world, (second_caller), (ComponentHand));
-        println!("Player 2's hand: {0}", player2_hand);
-        assert!(player2_hand.m_cards.len() == 5, "Player 1 should have received 5 cards!");
-     }
+       // Provide a deterministic seed.
+       starknet::testing::set_block_timestamp(2);
+
+       // Start the game.
+       table.start();
+
+       // Check players' hands.
+       let player1_hand = get!(world, (first_caller), (ComponentHand));
+       println!("Player 1's hand: {0}", player1_hand);
+       assert!(player1_hand.m_cards.len() == 5, "Player 1 should have received 5 cards!");
+       let player2_hand = get!(world, (second_caller), (ComponentHand));
+       println!("Player 2's hand: {0}", player2_hand);
+       assert!(player2_hand.m_cards.len() == 5, "Player 1 should have received 5 cards!");
+
+       let game = get!(world, (world.contract_address), (ComponentGame));
+       assert!(game.m_state == EnumGameState::Started, "Game should have started!");
+
+       assert!(dealer.m_cards.len() == 95, "Dealer should have 95 cards after distributing to 2 players!");
+    }
+
+    #[test]
+    #[should_panic(expected: ("Player not at table", 'ENTRYPOINT_FAILED'))]
+    fn test_new_turn() {
+       let first_caller = starknet::contract_address_const::<0x0a>();
+       let second_caller = starknet::contract_address_const::<0x0b>();
+       let dummy_caller = starknet::contract_address_const::<0x0c>();
+       let (mut table, mut world) = deploy_world();
+
+       // Set player one as the next caller.
+       starknet::testing::set_contract_address(first_caller);
+
+       // Make two players join.
+       // Join player one.
+       table.join("Player 1");
+
+       // Set player two as the next caller.
+       starknet::testing::set_contract_address(second_caller);
+
+       // Join player two.
+       table.join("Player 2");
+
+       table.start();
+
+       // Set player one as the next caller.
+       starknet::testing::set_contract_address(first_caller);
+
+       table.new_turn();
+
+       let player = get!(world, (first_caller), (ComponentPlayer));
+       assert!(player.m_state == EnumPlayerState::TurnStarted, "Player 1 should have started their turn!");
+
+       // Set player one as the next caller.
+       starknet::testing::set_contract_address(dummy_caller);
+
+       // Should panic.
+       table.new_turn();
+    }
+
+    #[test]
+    #[should_panic(expected: ("Not player's turn", 'ENTRYPOINT_FAILED'))]
+    fn test_draw() {
+       let first_caller = starknet::contract_address_const::<0x0a>();
+       let second_caller = starknet::contract_address_const::<0x0b>();
+       let (mut table, mut world) = deploy_world();
+
+       table::create_cards(ref world);
+
+       // Set player one as the next caller.
+       starknet::testing::set_contract_address(first_caller);
+
+       // Make two players join.
+       // Join player one.
+       table.join("Player 1");
+
+       // Set player two as the next caller.
+       starknet::testing::set_contract_address(second_caller);
+
+       // Join player two.
+       table.join("Player 2");
+
+       table.start();
+
+       let mut dealer = get!(world, (world.contract_address), (ComponentDealer));
+       assert!(!dealer.m_cards.is_empty(), "Dealer should have cards!");
+
+       // Set player one as the next caller.
+       starknet::testing::set_contract_address(first_caller);
+
+       table.new_turn();
+       table.draw(false);
+
+       let hand = get!(world, (first_caller), (ComponentHand));
+       assert!(hand.m_cards.len() == 7, "Player 1 should have two more cards at this point!");
+
+       // Should panic.
+       table.draw(false);
+    }
 }

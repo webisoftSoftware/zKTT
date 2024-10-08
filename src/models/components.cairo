@@ -1,18 +1,3 @@
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////   _______  _       __________________  /////////////////////////////
-///////////////////////////////  / ___   )| \    /\\__   __/\__   __/  /////////////////////////////
-///////////////////////////////  \/   )  ||  \  / /   ) (      ) (     /////////////////////////////
-///////////////////////////////      /   )|  (_/ /    | |      | |     /////////////////////////////
-///////////////////////////////     /   / |   _ (     | |      | |     /////////////////////////////
-///////////////////////////////    /   /  |  ( \ \    | |      | |     /////////////////////////////
-///////////////////////////////   /   (_/\|  /  \ \   | |      | |     /////////////////////////////
-///////////////////////////////  (_______/|_/    \/   )_(      )_(     /////////////////////////////
-///////////////////////////////                                        /////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////
 // Copyright (c) 2024 zkTT
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -35,6 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use starknet::ContractAddress;
+use origami_random::deck::{Deck, DeckTrait};
 use core::fmt::{Display, Formatter, Error};
 
 ////////////////////////////////////////////////////////////////////////////
@@ -51,8 +37,7 @@ use core::fmt::{Display, Formatter, Error};
 struct ComponentCard {
     #[key]
     m_ent_owner: ContractAddress,
-    m_type: EnumCard,
-    m_is_owner: bool
+    m_type: EnumCard
 }
 
 /// Component that represents the Pile of cards in the middle of the board, not owned by any player
@@ -131,6 +116,22 @@ struct ComponentPlayer {
     m_in_debt: Option<u8>
 }
 
+/// Component that represents a turn in the game.
+///
+/// Per player.
+#[derive(Drop, Serde, Clone, Debug)]
+#[dojo::model]
+struct ComponentTurn {
+    #[key]
+    m_ent_owner: ContractAddress,
+    m_username: ByteArray,
+    m_moves_remaining: u8,
+    m_score: u32,
+    m_sets: u8,
+    m_state: EnumPlayerState,
+    m_in_debt: Option<u8>
+}
+
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////// STRUCTS /////////////////////////////////
@@ -165,7 +166,7 @@ struct StructBlockchain {
     m_copies_left: u8
 }
 
-/// Card that allows a player to draw two cards, and make it only count as one move.
+/// Card that allows a player to draw two additional cards, and make it only count as one move.
 #[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct StructDraw {
     m_owner: ContractAddress,
@@ -238,8 +239,7 @@ impl ComponentHandDisplay of Display<ComponentHand> {
 
 impl StructAssetDisplay of Display<StructAsset> {
     fn fmt(self: @StructAsset, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Asset: {0}, Value: {1}, Copies Left: {2}",
-         self.m_name, *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("Asset: {0}, Value: {1}", self.m_name, *self.m_value);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -264,8 +264,8 @@ impl StructAssetGroupDisplay of Display<StructAssetGroup> {
 
 impl StructBlockchainDisplay of Display<StructBlockchain> {
     fn fmt(self: @StructBlockchain, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Blockchain: {0}, Type: {1}, Fee: {2}, Value {3}, Copies Left: {4}",
-         self.m_name, self.m_bc_type, *self.m_fee, *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("Blockchain: {0}, Type: {1}, Fee: {2}, Value {3}",
+         self.m_name, self.m_bc_type, *self.m_fee, *self.m_value);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -273,8 +273,7 @@ impl StructBlockchainDisplay of Display<StructBlockchain> {
 
 impl StructDrawDisplay of Display<StructDraw> {
     fn fmt(self: @StructDraw, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Draw Two Cards: Value {0}, Copies Left: {1}", *self.m_value,
-         *self.m_copies_left);
+        let str: ByteArray = format!("Draw Two Cards: Value {0}", *self.m_value);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -395,9 +394,8 @@ impl EnumMoveErrorDisplay of Display<EnumMoveError> {
 
 impl StructGasFeeDisplay of Display<StructGasFee> {
     fn fmt(self: @StructGasFee, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Gas Fee: {0}, Targeted Blockchain: {1}, Value: {2}\n
-            Copies Left: {3}", self.m_name, self.m_blockchain_type_affected, *self.m_value,
-             *self.m_copies_left);
+        let str: ByteArray = format!("Gas Fee: {0}, Targeted Blockchain: {1}, Value: {2}",
+         self.m_name, self.m_blockchain_type_affected, *self.m_value);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -405,8 +403,7 @@ impl StructGasFeeDisplay of Display<StructGasFee> {
 
 impl StructMajorityAttackDisplay of Display<StructMajorityAttack> {
     fn fmt(self: @StructMajorityAttack, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("51% Attack: {0}, Value: {1}, Copies Left: {2}", self.m_name,
-            *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("51% Attack: {0}, Value: {1}", self.m_name, *self.m_value);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -526,9 +523,14 @@ impl EnumCardInto of Into<EnumCard, ByteArray> {
 
 #[generate_trait]
 impl StructAssetImpl of IAsset {
-    fn new(owner: ContractAddress, name: ByteArray, value: u8, copies_left: u8) -> StructAsset {
+    fn new(owner: Option<ContractAddress>, name: ByteArray, value: u8, copies_left: u8) -> StructAsset {
+        let addr = if owner.is_none() {
+            starknet::contract_address_const::<0x0>()
+        } else {
+            owner.unwrap()
+        };
         return StructAsset {
-            m_owner: owner,
+            m_owner: addr,
             m_name: name,
             m_value: value,
             m_copies_left: copies_left
@@ -538,9 +540,14 @@ impl StructAssetImpl of IAsset {
 
 #[generate_trait]
 impl StructAssetGroupImpl of IAssetGroup {
-    fn new(owner: ContractAddress, blockchains: Array<StructBlockchain>, total_fee_value: u8) -> StructAssetGroup {
+    fn new(owner: Option<ContractAddress>, blockchains: Array<StructBlockchain>, total_fee_value: u8) -> StructAssetGroup {
+        let addr = if owner.is_none() {
+            starknet::contract_address_const::<0x0>()
+        } else {
+            owner.unwrap()
+        };
         return StructAssetGroup {
-            m_owner: owner,
+            m_owner: addr,
             m_set: blockchains,
             m_total_fee_value: total_fee_value
         };
@@ -549,13 +556,34 @@ impl StructAssetGroupImpl of IAssetGroup {
 
 #[generate_trait]
 impl StructBlockchainImpl of IBlockchain {
-    fn new(owner: ContractAddress, name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8,
+    fn new(owner: Option<ContractAddress>, name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8,
         copies_left: u8) -> StructBlockchain {
+        let addr = if owner.is_none() {
+            starknet::contract_address_const::<0x0>()
+        } else {
+            owner.unwrap()
+        };
         return StructBlockchain {
-            m_owner: owner,
+            m_owner: addr,
             m_name: name,
             m_bc_type: bc_type,
             m_fee: fee,
+            m_value: value,
+            m_copies_left: copies_left
+        };
+    }
+}
+
+#[generate_trait]
+impl StructDrawImpl of IDraw {
+    fn new(owner: Option<ContractAddress>, value: u8, copies_left: u8) -> StructDraw {
+        let addr = if owner.is_none() {
+            starknet::contract_address_const::<0x0>()
+        } else {
+            owner.unwrap()
+        };
+        return StructDraw {
+            m_owner: addr,
             m_value: value,
             m_copies_left: copies_left
         };
@@ -567,19 +595,7 @@ impl CardImpl of ICard {
     fn new(owner: ContractAddress, card: EnumCard) -> ComponentCard {
         return ComponentCard {
             m_ent_owner: owner,
-            m_type: card,
-            m_is_owner: true
-        };
-    }
-}
-
-#[generate_trait]
-impl StructDrawImpl of IDraw {
-    fn new(owner: ContractAddress, value: u8, copies_left: u8) -> StructDraw {
-        return StructDraw {
-            m_owner: owner,
-            m_value: value,
-            m_copies_left: copies_left
+            m_type: card
         };
     }
 }
@@ -591,6 +607,21 @@ impl DealerImpl of IDealer {
             m_ent_owner: owner,
             m_cards: cards
         };
+    }
+
+    fn shuffle(ref self: ComponentDealer, seed: felt252) -> () {
+        let mut shuffled_cards: Array<EnumCard> = ArrayTrait::new();
+        let mut deck = DeckTrait::new(seed, self.m_cards.len());
+
+        while deck.remaining > 0 {
+            // Draw a random number from 0 to 105.
+            let card_index: u8 = deck.draw();
+
+            if let Option::Some(_) = self.m_cards.get(card_index.into()) {
+                shuffled_cards.append(self.m_cards[card_index.into()].clone());
+            }
+        };
+        self.m_cards = shuffled_cards;
     }
 
     fn pop_card(ref self: ComponentDealer) -> Option<EnumCard> {
@@ -608,7 +639,8 @@ impl DeckImpl of IDeck {
         if let Option::Some(_) = self.contains(@bc) {
             panic!("{0}", EnumMoveError::CardAlreadyPresent);
         }
-        let new_bc = bc.set_owner(self.m_ent_owner);
+
+        let new_bc = bc.set_owner(Option::Some(self.m_ent_owner));
         self.m_cards.append(new_bc);
     }
 
@@ -683,7 +715,7 @@ impl DeckImpl of IDeck {
         };
 
         if self.check_complete_set(@asset_group_array, bc.m_bc_type) {
-            asset_group = Option::Some(IAssetGroup::new(*self.m_ent_owner, asset_group_array,
+            asset_group = Option::Some(IAssetGroup::new(Option::Some(*self.m_ent_owner), asset_group_array,
              total_fee));
         }
         return asset_group;
@@ -729,52 +761,186 @@ impl DeckImpl of IDeck {
 
 #[generate_trait]
 impl EnumCardImpl of IEnumCard {
-    fn get_owner(self: @EnumCard) -> @ContractAddress {
+    fn distribute(ref self: EnumCard, in_container: Array<EnumCard>) -> Array<EnumCard> {
+        assert!(self.get_copies_left() > 0, "No more copies left for {0}", self);
+
+        let mut new_array = ArrayTrait::new();
+        while self.get_copies_left() != 0 {
+            new_array.append(self.remove_one_copy());
+        };
+        return new_array;
+    }
+
+    fn get_copies_left(self: @EnumCard) -> u8 {
         return match self {
             EnumCard::Asset(data) => {
-                return data.m_owner;
+                return *data.m_copies_left;
             },
             EnumCard::Blockchain(data) => {
-                return data.m_owner;
+                return *data.m_copies_left;
             },
             EnumCard::Claim(data) => {
-                return data.m_owner;
+                return *data.m_copies_left;
             },
             EnumCard::Deny(data) => {
-                return data.m_owner;
+                return *data.m_copies_left;
             },
             EnumCard::Draw(data) => {
-                return data.m_owner;
+                return *data.m_copies_left;
             },
             EnumCard::StealBlockchain(data) => {
-                return data.m_owner;
+                return *data.m_copies_left;
             },
-            EnumCard::StealAssetGroup(data) => {
-                return data.m_owner;
+            EnumCard::StealAssetGroup(_) => {
+                return 0;
             }
         };
     }
 
-    fn set_owner(self: EnumCard, new_owner: ContractAddress) -> EnumCard {
+    fn remove_one_copy(self: @EnumCard) -> EnumCard {
+        return match self {
+            EnumCard::Asset(data) => {
+                let mut data: StructAsset = data.clone();
+                if data.m_copies_left != 0 {
+                    data.m_copies_left -= 1;
+                    return EnumCard::Asset(data);
+                }
+                return EnumCard::Asset(data);
+            },
+            EnumCard::Blockchain(data) => {
+                let mut data: StructBlockchain = data.clone();
+                if data.m_copies_left != 0 {
+                    data.m_copies_left -= 1;
+                    return EnumCard::Blockchain(data);
+                }
+                return EnumCard::Blockchain(data);
+            },
+            EnumCard::Claim(data) => {
+                let mut data: StructGasFee = data.clone();
+                if data.m_copies_left != 0 {
+                    data.m_copies_left -= 1;
+                    return EnumCard::Claim(data);
+                }
+                return EnumCard::Claim(data);
+            },
+            EnumCard::Deny(data) => {
+                let mut data: StructMajorityAttack = data.clone();
+                if data.m_copies_left != 0 {
+                    data.m_copies_left -= 1;
+                    return EnumCard::Deny(data);
+                }
+                return EnumCard::Deny(data);
+            },
+            EnumCard::Draw(data) => {
+                let mut data: StructDraw = data.clone();
+                if data.m_copies_left != 0 {
+                    data.m_copies_left -= 1;
+                    return EnumCard::Draw(data);
+                }
+                return EnumCard::Draw(data);
+            },
+            EnumCard::StealBlockchain(data) => {
+                let mut data: StructBlockchain = data.clone();
+                if data.m_copies_left != 0 {
+                    data.m_copies_left -= 1;
+                    return EnumCard::StealBlockchain(data);
+                }
+                return EnumCard::StealBlockchain(data);
+            },
+            EnumCard::StealAssetGroup(data) => { return EnumCard::StealAssetGroup(data.clone()); }
+        };
+    }
+
+    fn get_owner(self: @EnumCard) -> Option<@ContractAddress> {
+        return match self {
+            EnumCard::Asset(data) => {
+                if data.m_owner == @starknet::contract_address_const::<0x0>() {
+                    return Option::None;
+                }
+
+                return Option::Some(data.m_owner);
+            },
+            EnumCard::Blockchain(data) => {
+                if data.m_owner == @starknet::contract_address_const::<0x0>() {
+                    return Option::None;
+                }
+
+                return Option::Some(data.m_owner);
+            },
+            EnumCard::Claim(data) => {
+                if data.m_owner == @starknet::contract_address_const::<0x0>() {
+                    return Option::None;
+                }
+
+                return Option::Some(data.m_owner);
+            },
+            EnumCard::Deny(data) => {
+                if data.m_owner == @starknet::contract_address_const::<0x0>() {
+                    return Option::None;
+                }
+
+                return Option::Some(data.m_owner);
+            },
+            EnumCard::Draw(data) => {
+                if data.m_owner == @starknet::contract_address_const::<0x0>() {
+                    return Option::None;
+                }
+
+                return Option::Some(data.m_owner);
+            },
+            EnumCard::StealBlockchain(data) => {
+                if data.m_owner == @starknet::contract_address_const::<0x0>() {
+                    return Option::None;
+                }
+
+                return Option::Some(data.m_owner);
+            },
+            EnumCard::StealAssetGroup(data) => {
+                if data.m_owner == @starknet::contract_address_const::<0x0>() {
+                    return Option::None;
+                }
+
+                return Option::Some(data.m_owner);
+            }
+        };
+    }
+
+    fn set_owner(self: EnumCard, new_owner: Option<ContractAddress>) -> EnumCard {
         return match self {
             EnumCard::Asset(data) => {
                 let mut copy = data;
-                copy.m_owner = new_owner;
+                if new_owner.is_none() {
+                    copy.m_owner = starknet::contract_address_const::<0x0>();
+                    return EnumCard::Asset(copy);
+                }
+                copy.m_owner = new_owner.unwrap();
                 return EnumCard::Asset(copy);
             },
             EnumCard::Blockchain(data) => {
                 let mut copy = data;
-                copy.m_owner = new_owner;
+                if new_owner.is_none() {
+                    copy.m_owner = starknet::contract_address_const::<0x0>();
+                    return EnumCard::Blockchain(copy);
+                }
+                copy.m_owner = new_owner.unwrap();
                 return EnumCard::Blockchain(copy);
             },
             EnumCard::Claim(data) => {
                 let mut copy = data;
-                copy.m_owner = new_owner;
+                if new_owner.is_none() {
+                    copy.m_owner = starknet::contract_address_const::<0x0>();
+                    return EnumCard::Claim(copy);
+                }
+                copy.m_owner = new_owner.unwrap();
                 return EnumCard::Claim(copy);
             },
             EnumCard::Deny(data) => {
                 let mut copy = data;
-                copy.m_owner = new_owner;
+                if new_owner.is_none() {
+                    copy.m_owner = starknet::contract_address_const::<0x0>();
+                    return EnumCard::Deny(copy);
+                }
+                copy.m_owner = new_owner.unwrap();
                 return EnumCard::Deny(copy);
             },
             EnumCard::Draw(data) => {
@@ -782,12 +948,20 @@ impl EnumCardImpl of IEnumCard {
             },
             EnumCard::StealBlockchain(StructBlockchain) => {
                 let mut copy = StructBlockchain;
-                copy.m_owner = new_owner;
+                if new_owner.is_none() {
+                    copy.m_owner = starknet::contract_address_const::<0x0>();
+                    return EnumCard::StealBlockchain(copy);
+                }
+                copy.m_owner = new_owner.unwrap();
                 return EnumCard::StealBlockchain(copy);
             },
             EnumCard::StealAssetGroup(StructAsset_group) => {
                 let mut copy = StructAsset_group;
-                copy.m_owner = new_owner;
+                if new_owner.is_none() {
+                    copy.m_owner = starknet::contract_address_const::<0x0>();
+                    return EnumCard::StealAssetGroup(copy);
+                }
+                copy.m_owner = new_owner.unwrap();
                 return EnumCard::StealAssetGroup(copy);
             },
             _ => {
@@ -906,11 +1080,16 @@ impl GameImpl of IGame {
 
 #[generate_trait]
 impl GasFeeImpl of IGasFee {
-    fn new(owner: ContractAddress, name: ByteArray, players: Array<ContractAddress>,
+    fn new(owner: Option<ContractAddress>, name: ByteArray, players: Array<ContractAddress>,
         bc_affected: EnumBlockchainType, boost: Array<u8>, count: Option<u8>, value: u8,
         copies_left: u8) -> StructGasFee {
+        let addr = if owner.is_none() {
+            starknet::contract_address_const::<0x0>()
+        } else {
+            owner.unwrap()
+        };
         return StructGasFee {
-            m_owner: owner,
+            m_owner: addr,
             m_name: name,
             m_players_affected: players,
             // If there is no Blockchain specified, it can be applied to any Blockchain.
@@ -946,7 +1125,7 @@ impl HandImpl of IHand {
         }
 
         // Transfer ownership.
-        let new_card = card.set_owner(self.m_ent_owner);
+        let new_card = card.set_owner(Option::Some(self.m_ent_owner));
         self.m_cards.append(new_card);
     }
 
@@ -994,7 +1173,7 @@ impl DepositImpl of IDeposit {
     fn add(ref self: ComponentDeposit, mut card: EnumCard) -> () {
         assert!(!card.is_blockchain(), "Blockchains cannot be added to money pile");
 
-        let new_card = card.set_owner(self.m_ent_owner);
+        let new_card = card.set_owner(Option::Some(self.m_ent_owner));
         self.m_total_value += new_card.get_value();
         self.m_cards.append(new_card);
         return ();

@@ -15,8 +15,14 @@ version = "1.0.0-alpha.4"
 source = "git+https://github.com/dojoengine/dojo?rev=f15def33#f15def330c0d099e79351d11c197f63e8cc1ff36"
 
 [[package]]
+name = "origami_random"
+version = "1.0.0-alpha.12"
+source = "git+https://github.com/dojoengine/origami.git?tag=v1.0.0-alpha.12#1bbf09c15f64a3037bd4bfd5838986912c3634eb"
+
+[[package]]
 name = "zktt"
 version = "0.1.0"
 dependencies = [
  "dojo",
+ "origami_random",
 ]

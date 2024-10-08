@@ -11,5 +11,6 @@ migrate = "sozo build && sozo migrate apply"
 
 [dependencies]
 dojo = { git = "https://github.com/dojoengine/dojo", tag = "v1.0.0-alpha.12" }
+origami_random = { git = "https://github.com/dojoengine/origami.git", tag = "v1.0.0-alpha.12"}
 
 [[target.dojo]]
