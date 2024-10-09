@@ -47,12 +47,13 @@ trait ITable {
 #[dojo::contract]
 mod table {
     use super::{ITable};
-    use starknet::{ContractAddress, get_block_timestamp, get_caller_address};
+    use starknet::{ContractAddress, get_block_timestamp, get_tx_info, get_caller_address};
     use zktt::models::components::{ComponentCard, ComponentDealer, ComponentDeck, ComponentDeposit,
      ComponentHand, ComponentGame, ComponentPlayer, EnumGameState, EnumMoveError,
       EnumCard, EnumPlayerState, EnumBlockchainType,
        IBlockchain, ICard, IDeck, IDealer, IEnumCard, IGame, IGasFee, IDeposit, IPlayer, IHand, IAsset,
        StructAsset};
+    use core::poseidon::poseidon_hash_span;
 
     //////////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////////
@@ -68,7 +69,7 @@ mod table {
     /// Output:
     /// The deck with one copy of all the card types (unflatten) [59].
     /// Can Panic?: no
-    fn _create_cards(ref world: IWorldDispatcher) -> Array<EnumCard> {
+    fn _create_cards(ref world: IWorldDispatcher) -> Array<EnumCard> nopanic {
         // Step 1: Create cards and put them in a container in order.
        let cards_in_order: Array<EnumCard> =
        array![EnumCard::Asset(IAsset::new(Option::Some(world.contract_address), "ETH [1]", 1, 6)),
@@ -118,8 +119,17 @@ mod table {
     /// Output:
     /// The deck with all copies of all the card types (flattened) [105].
     /// Can Panic?: yes
-    fn _flatten(ref container: Array<EnumCard>) -> Array<EnumCard> {
-        return array![];
+    fn _flatten(mut container: Array<EnumCard>) -> Array<EnumCard> {
+        let mut flattened_array = ArrayTrait::new();
+
+        while let Option::Some(mut card) = container.pop_front() {
+            let mut copies_left: u8 = card.get_copies_left();
+            while copies_left > 0 {
+                flattened_array.append(card.remove_one_copy());
+                copies_left -= 1;
+            };
+        };
+        return flattened_array;
     }
 
     /// Create the initial deck of cards for the game and assign them to the dealer. Only ran once
@@ -159,16 +169,17 @@ mod table {
     ///
     /// Output:
     /// The resulting seed hash.
-    /// Can Panic?: no
+    /// Can Panic?: yes
     fn _generate_seed(world_address: @ContractAddress, players: @Array<ContractAddress>) -> felt252 {
-        let mut seed: felt252 = 0;
+        let mut array_of_felts: Array<felt252> = array![get_block_timestamp().into(), get_tx_info().nonce];
 
         let mut index: usize = 0;
         while index < players.len() {
-            seed += get_block_timestamp().into();
+            array_of_felts.append(starknet::contract_address_to_felt252(*players.at(index)));
             index += 1;
         };
-        seed *= players.len().into();
+
+        let mut seed: felt252 = poseidon_hash_span(array_of_felts.span());
         return seed;
     }
 
@@ -221,6 +232,7 @@ mod table {
     /// Can Panic?: yes
     fn _use_card(ref world: IWorldDispatcher, caller: @ContractAddress, card: EnumCard) -> () {
         let (mut hand, mut deck, mut deposit) = get!(world, (*caller), (ComponentHand, ComponentDeck, ComponentDeposit));
+        assert!(hand.contains(@card).is_some(), "Card not in player's hand");
         hand.remove(@card);
 
         match card {
@@ -232,7 +244,7 @@ mod table {
                 deck.add(EnumCard::Blockchain(blockchain_struct));
                 set!(world, (deck));
             },
-            EnumCard::Claim(mut gas_fee_struct) => {
+            EnumCard::GasFee(mut gas_fee_struct) => {
                 // Check if the player playing it has the right blockchain to play this against.
                 if gas_fee_struct.m_blockchain_type_affected != EnumBlockchainType::Immutable &&
                     deck.contains_type(@gas_fee_struct.m_blockchain_type_affected).is_none() {
@@ -251,10 +263,10 @@ mod table {
                     set!(world, (player_component));
                 };
             },
-            EnumCard::Deny(_majority_struct) => {
+            EnumCard::HardFork(_majority_struct) => {
                 //TODO: Add Hardfork card.
             },
-            EnumCard::Draw(_draw_struct) => {
+            EnumCard::PriorityFee(_PriorityFee_struct) => {
                  let mut dealer = get!(world, (world.contract_address), (ComponentDealer));
                  assert!(!dealer.m_cards.is_empty(), "Dealer has no more cards");
 
@@ -302,14 +314,14 @@ mod table {
     ///
     /// Output:
     /// None.
-    /// Can Panic?: no
+    /// Can Panic?: yes
     fn _is_owner(world: @IWorldDispatcher, card: @EnumCard, caller: @ContractAddress) -> bool {
         let card_component = get!(*world, (*caller), (ComponentCard));
-        if card.get_owner().is_none() {
+        if card.get_owner() == starknet::contract_address_const::<0x0>() {
             return false;
         }
 
-        return card.get_owner().unwrap() == @card_component.m_ent_owner;
+        return card.get_owner() == card_component.m_ent_owner;
     }
 
     /// Set the owner for the card provided.
@@ -322,23 +334,10 @@ mod table {
     /// Output:
     /// None.
     /// Can Panic?: no
-    fn _register_card(ref world: IWorldDispatcher, card: EnumCard, owner: ContractAddress) -> () {
+    fn _register_card(ref world: IWorldDispatcher, mut card: EnumCard, owner: ContractAddress) -> () {
         // Register the card's new owner.
+        card.set_owner(owner);
         set!(world, (ICard::new(owner, card)));
-    }
-
-    /// Set the owner for the card provided to a void address (discarding it).
-    ///
-    /// Inputs:
-    /// *world*: The mutable reference of the world to write components to.
-    /// *card*: The card in question.
-    ///
-    /// Output:
-    /// None.
-    /// Can Panic?: no
-    fn _discard_card(ref world: IWorldDispatcher, card: EnumCard) -> () {
-        // Register the card's new owner.
-        set!(world, (ICard::new(starknet::contract_address_const::<0x0>(), card)));
     }
 
     //////////////////////////////////////////////////////////////////////////////
@@ -368,8 +367,9 @@ mod table {
             assert!(game.m_state != EnumGameState::Started, "Game has already started");
             assert!(game.m_players.len() < 5, "Lobby already full");
 
-            game.add_player(get_caller_address());
-            let mut new_player: ComponentPlayer = IPlayer::new(get_caller_address(), username);
+            let caller = get_caller_address();
+            game.add_player(caller);
+            let mut new_player: ComponentPlayer = IPlayer::new(caller, username);
             new_player.m_state = EnumPlayerState::Joined;
 
             set!(world, (new_player, game));
@@ -441,9 +441,8 @@ mod table {
         /// None.
         /// Can Panic?: yes
         fn draw(ref world: IWorldDispatcher, draws_five: bool) -> () {
-            let seed = world.contract_address;
-            let (mut hand, mut player) = get!(world, (get_caller_address()), (ComponentHand,
-             ComponentPlayer));
+            let caller = get_caller_address();
+            let (mut hand, mut player) = get!(world, (caller), (ComponentHand, ComponentPlayer));
             let game = get!(world, (world.contract_address), (ComponentGame));
 
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
@@ -451,7 +450,7 @@ mod table {
             assert!(player.m_state == EnumPlayerState::TurnStarted, "Not player's turn");
             assert!(player.m_moves_remaining == 3, "Cannot draw mid-turn");
 
-            let mut dealer = get!(world, (seed), ComponentDealer);
+            let mut dealer = get!(world, (world.contract_address), ComponentDealer);
             if draws_five {
                 assert!(hand.m_cards.len() == 0, "Cannot draw five, hand not empty");
                 let mut index: usize = 0;
@@ -463,7 +462,7 @@ mod table {
                     }
 
                     let card = dealer.pop_card().unwrap();
-                    _register_card(ref ref_world, card.clone(), get_caller_address());
+                    _register_card(ref ref_world, card.clone(), caller);
 
                     hand.add(card);
                 };
@@ -473,7 +472,7 @@ mod table {
                 return ();
             }
 
-            let mut dealer = get!(world, (seed), ComponentDealer);
+            let mut dealer = get!(world, (world.contract_address), ComponentDealer);
             let card1_opt = dealer.pop_card();
             let card2_opt = dealer.pop_card();
 
@@ -504,15 +503,16 @@ mod table {
             let game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
-            let mut player = get!(world, get_caller_address(), (ComponentPlayer));
+            let caller = get_caller_address();
+            let mut player = get!(world, caller, (ComponentPlayer));
             assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
             assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
             assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
             assert!(player.m_moves_remaining != 0, "No moves left");
 
             let mut world_cpy = world;
-            assert!(_is_owner(@world_cpy, @card, @get_caller_address()), "Player does not own card");
-            _use_card(ref world_cpy, @get_caller_address(), card);
+            assert!(_is_owner(@world_cpy, @card, @caller), "Player does not own card");
+            _use_card(ref world_cpy, @caller, card);
 
             player.m_moves_remaining -= 1;
             set!(world, (player));
@@ -535,13 +535,14 @@ mod table {
             let game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
-            let mut player = get!(world, get_caller_address(), (ComponentPlayer));
+            let caller = get_caller_address();
+            let mut player = get!(world, caller, (ComponentPlayer));
             assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
             assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
             assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
 
             let mut world_cpy = world;
-            assert!(_is_owner(@world_cpy, @card, @get_caller_address()), "Player does not own card");
+            assert!(_is_owner(@world_cpy, @card, @caller), "Player does not own card");
             // TODO: Move card around in deck.
             set!(world, (player));
             return ();
@@ -624,7 +625,8 @@ mod table {
             let mut game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
 
-            let player = get!(world, (get_caller_address()), (ComponentPlayer));
+            let caller = get_caller_address();
+            let player = get!(world, (caller), (ComponentPlayer));
             assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
 
             let (mut hand, mut deck, mut deposit) = get!(world, (player.m_ent_owner), (ComponentHand,
@@ -635,7 +637,7 @@ mod table {
             // deck.discard_cards();
             // deposit.discard_cards();
 
-            game.remove_player(@get_caller_address());
+            game.remove_player(@caller);
             delete!(world, (player, hand, deck, deposit));
             set!(world, (game));
             return ();

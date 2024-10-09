@@ -33,7 +33,24 @@ mod tests {
 
     #[test]
     fn test_cards_init() -> () {
+        let world = starknet::contract_address_const::<0xa>();
+        let mut array = array![
+        EnumCard::Asset(IAsset::new(Option::Some(world), "ETH [1]", 1, 6)),
+        EnumCard::Asset(IAsset::new(Option::Some(world), "ETH [2]", 1, 6)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Optimism", EnumBlockchainType::Red, 2, 4, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Osmosis", EnumBlockchainType::Pink, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Polkadot", EnumBlockchainType::Pink, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Polygon", EnumBlockchainType::Purple, 2, 3, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Scroll", EnumBlockchainType::Yellow, 2, 3, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Solana", EnumBlockchainType::Purple,  2, 3, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Taiko", EnumBlockchainType::Pink, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Ton", EnumBlockchainType::Blue, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "ZKSync", EnumBlockchainType::Grey, 1, 2, 1))
+         ];
+        let new_array = table::_flatten(array);
 
+        assert!(new_array.len() == 22, "There should have been 22 cards in deck!");
     }
 
     #[test]

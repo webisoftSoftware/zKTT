@@ -70,6 +70,37 @@ mod tests {
         return (table, world);
     }
 
+    fn set_up_cards(ref world: IWorldDispatcher) {
+        let unique_cards_in_order = table::_create_cards(ref world);
+        let all_cards_in_order = table::_flatten(unique_cards_in_order);
+
+        let dealer: ComponentDealer = IDealer::new(world.contract_address, all_cards_in_order);
+
+        let mut index: usize = 0;
+        while index < dealer.m_cards.len() {
+            // Register the card's new owner.
+            set!(world, (ICard::new(world.contract_address, dealer.m_cards.at(index).clone())));
+            index += 1;
+        };
+
+        set!(world, (dealer));
+    }
+
+    #[test]
+    fn test_dummy_player() {
+        let (mut table, world) = deploy_world();
+        // Join player one.
+        table.join("Player 1");
+
+        let second_caller = starknet::contract_address_const::<0x0b>();
+        // Set unknown player as the next caller.
+        starknet::testing::set_contract_address(second_caller);
+
+        let unknown_player = get!(world, (second_caller), (ComponentPlayer));
+        println!("{0}", unknown_player);
+        assert!(unknown_player.m_ent_owner == second_caller, "Dummy player created...!");
+    }
+
     #[test]
     fn test_join() {
         let second_caller = starknet::contract_address_const::<0x0b>();
@@ -88,7 +119,6 @@ mod tests {
         assert!(player_two.m_state == EnumPlayerState::Joined, "Player 2 should have joined!");
     }
 
-    // TODO: Make dealer have actually 105 cards.
     #[test]
     #[should_panic(expected: ("Dealer should have 95 cards after distributing to 2 players!",))]
     fn test_start() {
@@ -96,18 +126,7 @@ mod tests {
        let second_caller = starknet::contract_address_const::<0x0b>();
        let (mut table, mut world) = deploy_world();
 
-       let cards = table::_create_cards(ref world);
-
-       let dealer: ComponentDealer = IDealer::new(world.contract_address, cards);
-
-       let mut index: usize = 0;
-       while index < dealer.m_cards.len() {
-           // Register the card's new owner.
-           set!(world, (ICard::new(world.contract_address, dealer.m_cards.at(index).clone())));
-           index += 1;
-       };
-
-       set!(world, (dealer));
+       set_up_cards(ref world);
 
        let mut dealer = get!(world, (world.contract_address), (ComponentDealer));
        assert!(!dealer.m_cards.is_empty(), "Dealer should have cards!");
@@ -127,6 +146,8 @@ mod tests {
 
        // Provide a deterministic seed.
        starknet::testing::set_block_timestamp(2);
+       starknet::testing::set_nonce(0x0);
+
 
        // Start the game.
        table.start();
@@ -142,6 +163,7 @@ mod tests {
        let game = get!(world, (world.contract_address), (ComponentGame));
        assert!(game.m_state == EnumGameState::Started, "Game should have started!");
 
+       println!("{0}", dealer.m_cards.len());
        assert!(dealer.m_cards.len() == 95, "Dealer should have 95 cards after distributing to 2 players!");
     }
 
@@ -190,18 +212,7 @@ mod tests {
        let second_caller = starknet::contract_address_const::<0x0b>();
        let (mut table, mut world) = deploy_world();
 
-       let cards = table::_create_cards(ref world);
-
-       let dealer: ComponentDealer = IDealer::new(world.contract_address, cards);
-
-       let mut index: usize = 0;
-       while index < dealer.m_cards.len() {
-           // Register the card's new owner.
-           set!(world, (ICard::new(world.contract_address, dealer.m_cards.at(index).clone())));
-           index += 1;
-       };
-
-       set!(world, (dealer));
+       set_up_cards(ref world);
 
        // Set player one as the next caller.
        starknet::testing::set_contract_address(first_caller);
