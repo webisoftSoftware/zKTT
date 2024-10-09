@@ -801,50 +801,38 @@ impl EnumCardImpl of IEnumCard {
         return match self {
             EnumCard::Asset(data) => {
                 let mut data: StructAsset = data.clone();
-                if data.m_copies_left != 0 {
-                    data.m_copies_left -= 1;
-                    return EnumCard::Asset(data);
-                }
+                assert!(data.m_copies_left != 0, "No more copies left for {data}!");
+                data.m_copies_left -= 1;
                 return EnumCard::Asset(data);
             },
             EnumCard::Blockchain(data) => {
                 let mut data: StructBlockchain = data.clone();
-                if data.m_copies_left != 0 {
-                    data.m_copies_left -= 1;
-                    return EnumCard::Blockchain(data);
-                }
+                assert!(data.m_copies_left != 0, "No more copies left for {data}!");
+                data.m_copies_left -= 1;
                 return EnumCard::Blockchain(data);
             },
             EnumCard::Claim(data) => {
                 let mut data: StructGasFee = data.clone();
-                if data.m_copies_left != 0 {
-                    data.m_copies_left -= 1;
-                    return EnumCard::Claim(data);
-                }
+                assert!(data.m_copies_left != 0, "No more copies left for {data}!");
+                data.m_copies_left -= 1;
                 return EnumCard::Claim(data);
             },
             EnumCard::Deny(data) => {
                 let mut data: StructMajorityAttack = data.clone();
-                if data.m_copies_left != 0 {
-                    data.m_copies_left -= 1;
-                    return EnumCard::Deny(data);
-                }
+                assert!(data.m_copies_left != 0, "No more copies left for {data}!");
+                data.m_copies_left -= 1;
                 return EnumCard::Deny(data);
             },
             EnumCard::Draw(data) => {
                 let mut data: StructDraw = data.clone();
-                if data.m_copies_left != 0 {
-                    data.m_copies_left -= 1;
-                    return EnumCard::Draw(data);
-                }
+                assert!(data.m_copies_left != 0, "No more copies left for {data}!");
+                data.m_copies_left -= 1;
                 return EnumCard::Draw(data);
             },
             EnumCard::StealBlockchain(data) => {
                 let mut data: StructBlockchain = data.clone();
-                if data.m_copies_left != 0 {
-                    data.m_copies_left -= 1;
-                    return EnumCard::StealBlockchain(data);
-                }
+                assert!(data.m_copies_left != 0, "No more copies left for {data}!");
+                data.m_copies_left -= 1;
                 return EnumCard::StealBlockchain(data);
             },
             EnumCard::StealAssetGroup(data) => { return EnumCard::StealAssetGroup(data.clone()); }

@@ -33,7 +33,7 @@ mod tests {
         systems::{game::{table, ITableDispatcher, ITableDispatcherTrait}},
         models::components::{ComponentCard, ComponentGame, ComponentPlayer, ComponentDealer, ComponentHand,
          ComponentDeck, component_game, component_player, component_dealer, component_deck,
-         component_hand, component_card, EnumPlayerState, EnumGameState, IPlayer}
+         component_hand, component_card, EnumPlayerState, EnumGameState, ICard, IDealer, IPlayer}
     };
 
     // Deploy world with supplied components registered.
@@ -96,7 +96,18 @@ mod tests {
        let second_caller = starknet::contract_address_const::<0x0b>();
        let (mut table, mut world) = deploy_world();
 
-       table::create_cards(ref world);
+       let cards = table::_create_cards(ref world);
+
+       let dealer: ComponentDealer = IDealer::new(world.contract_address, cards);
+
+       let mut index: usize = 0;
+       while index < dealer.m_cards.len() {
+           // Register the card's new owner.
+           set!(world, (ICard::new(world.contract_address, dealer.m_cards.at(index).clone())));
+           index += 1;
+       };
+
+       set!(world, (dealer));
 
        let mut dealer = get!(world, (world.contract_address), (ComponentDealer));
        assert!(!dealer.m_cards.is_empty(), "Dealer should have cards!");
@@ -179,7 +190,18 @@ mod tests {
        let second_caller = starknet::contract_address_const::<0x0b>();
        let (mut table, mut world) = deploy_world();
 
-       table::create_cards(ref world);
+       let cards = table::_create_cards(ref world);
+
+       let dealer: ComponentDealer = IDealer::new(world.contract_address, cards);
+
+       let mut index: usize = 0;
+       while index < dealer.m_cards.len() {
+           // Register the card's new owner.
+           set!(world, (ICard::new(world.contract_address, dealer.m_cards.at(index).clone())));
+           index += 1;
+       };
+
+       set!(world, (dealer));
 
        // Set player one as the next caller.
        starknet::testing::set_contract_address(first_caller);
