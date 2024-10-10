@@ -31,9 +31,9 @@ mod tests {
     // import test utils
     use zktt::{
         systems::{game::{table, ITableDispatcher, ITableDispatcherTrait}},
-        models::components::{ComponentCard, ComponentGame, ComponentPlayer, ComponentDealer, ComponentHand,
+        models::components::{ComponentGame, ComponentPlayer, ComponentDealer, ComponentHand,
          ComponentDeck, component_game, component_player, component_dealer, component_deck,
-         component_hand, component_card, EnumPlayerState, EnumGameState, ICard, IDealer, IPlayer}
+         component_hand, EnumPlayerState, EnumGameState, IDealer, IPlayer}
     };
 
     // Deploy world with supplied components registered.
@@ -44,8 +44,7 @@ mod tests {
          // Arg 2: A span list of all the models' class hashes to register.
          let models: Array<felt252> = array![component_game::TEST_CLASS_HASH,
                           component_player::TEST_CLASS_HASH, component_dealer::TEST_CLASS_HASH,
-                          component_hand::TEST_CLASS_HASH, component_deck::TEST_CLASS_HASH,
-                          component_card::TEST_CLASS_HASH];
+                          component_hand::TEST_CLASS_HASH, component_deck::TEST_CLASS_HASH];
 
          // NOTE: All model names somehow get converted to snake case, but you have to import the
          // snake case versions from the same path where the components are from.
@@ -63,7 +62,6 @@ mod tests {
         world.grant_writer(Model::<ComponentHand>::selector(), contract_address);
         world.grant_writer(Model::<ComponentDeck>::selector(), contract_address);
         world.grant_writer(Model::<ComponentDealer>::selector(), contract_address);
-        world.grant_writer(Model::<ComponentCard>::selector(), contract_address);
 
         // Setup contract object.
         let table: ITableDispatcher = ITableDispatcher { contract_address };
@@ -75,14 +73,6 @@ mod tests {
         let all_cards_in_order = table::_flatten(unique_cards_in_order);
 
         let dealer: ComponentDealer = IDealer::new(world.contract_address, all_cards_in_order);
-
-        let mut index: usize = 0;
-        while index < dealer.m_cards.len() {
-            // Register the card's new owner.
-            set!(world, (ICard::new(world.contract_address, dealer.m_cards.at(index).clone())));
-            index += 1;
-        };
-
         set!(world, (dealer));
     }
 
@@ -145,8 +135,8 @@ mod tests {
        table.join("Player 2");
 
        // Provide a deterministic seed.
-       starknet::testing::set_block_timestamp(2);
-       starknet::testing::set_nonce(0x0);
+       starknet::testing::set_block_timestamp(200);
+       starknet::testing::set_nonce(0x1);
 
 
        // Start the game.
@@ -154,10 +144,10 @@ mod tests {
 
        // Check players' hands.
        let player1_hand = get!(world, (first_caller), (ComponentHand));
-       println!("Player 1's hand: {0}", player1_hand);
+       println!("Caller {0}", player1_hand);
        assert!(player1_hand.m_cards.len() == 5, "Player 1 should have received 5 cards!");
        let player2_hand = get!(world, (second_caller), (ComponentHand));
-       println!("Player 2's hand: {0}", player2_hand);
+       println!("Caller {0}", player2_hand);
        assert!(player2_hand.m_cards.len() == 5, "Player 1 should have received 5 cards!");
 
        let game = get!(world, (world.contract_address), (ComponentGame));

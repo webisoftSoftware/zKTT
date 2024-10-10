@@ -33,20 +33,19 @@ mod tests {
 
     #[test]
     fn test_cards_init() -> () {
-        let world = starknet::contract_address_const::<0xa>();
         let mut array = array![
-        EnumCard::Asset(IAsset::new(Option::Some(world), "ETH [1]", 1, 6)),
-        EnumCard::Asset(IAsset::new(Option::Some(world), "ETH [2]", 1, 6)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Optimism", EnumBlockchainType::Red, 2, 4, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Osmosis", EnumBlockchainType::Pink, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Polkadot", EnumBlockchainType::Pink, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Polygon", EnumBlockchainType::Purple, 2, 3, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Scroll", EnumBlockchainType::Yellow, 2, 3, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Solana", EnumBlockchainType::Purple,  2, 3, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Taiko", EnumBlockchainType::Pink, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "Ton", EnumBlockchainType::Blue, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new(Option::Some(world), "ZKSync", EnumBlockchainType::Grey, 1, 2, 1))
+        EnumCard::Asset(IAsset::new("ETH [1]", 1, 6)),
+        EnumCard::Asset(IAsset::new("ETH [2]", 1, 6)),
+        EnumCard::Blockchain(IBlockchain::new("Optimism", EnumBlockchainType::Red, 2, 4, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Osmosis", EnumBlockchainType::Pink, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Polkadot", EnumBlockchainType::Pink, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Polygon", EnumBlockchainType::Purple, 2, 3, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Scroll", EnumBlockchainType::Yellow, 2, 3, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Solana", EnumBlockchainType::Purple,  2, 3, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Taiko", EnumBlockchainType::Pink, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Ton", EnumBlockchainType::Blue, 1, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("ZKSync", EnumBlockchainType::Grey, 1, 2, 1))
          ];
         let new_array = table::_flatten(array);
 
@@ -59,14 +58,14 @@ mod tests {
         starknet::contract_address_const::<0x1>(),
         starknet::contract_address_const::<0x2>()];
 
-        let asset1: StructAsset = IAsset::new(Option::Some(*callers.at(0)), "ETH [1]", 1, 6);
-        let asset2: StructAsset = IAsset::new(Option::Some(*callers.at(1)), "ETH [2]", 1, 6);
+        let asset1: StructAsset = IAsset::new("ETH [1]", 1, 6);
+        let asset2: StructAsset = IAsset::new("ETH [2]", 1, 6);
         let asset_card1 = EnumCard::Asset(asset1.clone());
         let asset_card2 = EnumCard::Asset(asset2.clone());
 
-        let mut hand1 = IHand::new(*callers.at(0), array![asset_card1.clone()]);
-        let hand2 = IHand::new(*callers.at(1), array![asset_card1.clone()]);
-        let hand3 = IHand::new(*callers.at(2), array![asset_card2]);
+        let mut hand1 = IHand::new(*callers[0], array![asset_card1.clone()]);
+        let hand2 = IHand::new(*callers[1], array![asset_card1.clone()]);
+        let hand3 = IHand::new(*callers[2], array![asset_card2]);
 
         assert!(hand1 == hand2, "Hands should be identical even with different owners");
         assert!(hand2 != hand3, "Hands should NOT be equal");
