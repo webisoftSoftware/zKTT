@@ -382,6 +382,7 @@ mod table {
     /// Can Panic?: yes
     fn _is_owner(world: @IWorldDispatcher, card_name: @ByteArray, caller: @ContractAddress) -> bool {
         let (hand, deck, deposit) = get!(*world, (*caller), (ComponentHand, ComponentDeck, ComponentDeposit));
+
         return hand.contains(card_name).is_some() || deck.contains(card_name).is_some() ||
             deposit.contains(card_name).is_some();
     }
