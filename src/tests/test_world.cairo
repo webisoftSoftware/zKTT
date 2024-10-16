@@ -33,7 +33,7 @@ mod tests {
         systems::{game::{table, ITableDispatcher, ITableDispatcherTrait}},
         models::components::{ComponentGame, ComponentPlayer, ComponentDealer, ComponentHand,
          ComponentDeck, component_game, component_player, component_dealer, component_deck,
-         component_hand, EnumPlayerState, EnumGameState, IDealer, IPlayer}
+         component_hand, EnumGameState, IDealer, IPlayer}
     };
 
     // Deploy world with supplied components registered.
@@ -105,8 +105,8 @@ mod tests {
         // Join player two.
         table.join("Player 2");
 
-        let player_two = get!(world, (second_caller), (ComponentPlayer));
-        assert!(player_two.m_state == EnumPlayerState::Joined, "Player 2 should have joined!");
+        let game = get!(world, (world.contract_address), (ComponentGame));
+        assert!(game.m_players.len() == 2, "Players should have joined!");
     }
 
     #[test]
@@ -135,8 +135,8 @@ mod tests {
        table.join("Player 2");
 
        // Provide a deterministic seed.
-       starknet::testing::set_block_timestamp(200);
-       starknet::testing::set_nonce(0x1);
+       starknet::testing::set_block_timestamp(240);
+       starknet::testing::set_nonce(0x111);
 
 
        // Start the game.
@@ -158,11 +158,9 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected: ("Player not at table", 'ENTRYPOINT_FAILED'))]
     fn test_new_turn() {
        let first_caller = starknet::contract_address_const::<0x0a>();
        let second_caller = starknet::contract_address_const::<0x0b>();
-       let dummy_caller = starknet::contract_address_const::<0x0c>();
        let (mut table, mut world) = deploy_world();
 
        // Set player one as the next caller.
@@ -180,23 +178,12 @@ mod tests {
 
        table.start();
 
-       // Set player one as the next caller.
-       starknet::testing::set_contract_address(first_caller);
-
-       table.new_turn();
-
-       let player = get!(world, (first_caller), (ComponentPlayer));
-       assert!(player.m_state == EnumPlayerState::TurnStarted, "Player 1 should have started their turn!");
-
-       // Set player one as the next caller.
-       starknet::testing::set_contract_address(dummy_caller);
-
-       // Should panic.
-       table.new_turn();
+       let game = get!(world, (world.contract_address), (ComponentGame));
+       assert!(game.m_player_in_turn == first_caller, "Player 1 should have started their turn!");
     }
 
     #[test]
-    #[should_panic(expected: ("Not player's turn", 'ENTRYPOINT_FAILED'))]
+    #[should_panic(expected: ("Cannot draw mid-turn", 'ENTRYPOINT_FAILED'))]
     fn test_draw() {
        let first_caller = starknet::contract_address_const::<0x0a>();
        let second_caller = starknet::contract_address_const::<0x0b>();
@@ -225,7 +212,6 @@ mod tests {
        // Set player one as the next caller.
        starknet::testing::set_contract_address(first_caller);
 
-       table.new_turn();
        table.draw(false);
 
        let hand = get!(world, (first_caller), (ComponentHand));

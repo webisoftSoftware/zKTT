@@ -34,7 +34,6 @@ use starknet::ContractAddress;
 trait ITable {
     fn join(ref world: IWorldDispatcher, username: ByteArray) -> ();
     fn start(ref world: IWorldDispatcher) -> ();
-    fn new_turn(ref world: IWorldDispatcher) -> ();
     fn draw(ref world: IWorldDispatcher, draws_five: bool) -> ();
     fn play(ref world: IWorldDispatcher, card: EnumCard) -> ();
     fn move(ref world: IWorldDispatcher, card: EnumCard) -> ();
@@ -50,7 +49,7 @@ mod table {
     use starknet::{ContractAddress, get_block_timestamp, get_tx_info, get_caller_address};
     use zktt::models::components::{ComponentDealer, ComponentDeck, ComponentDeposit,
      ComponentHand, ComponentGame, ComponentPlayer, EnumGameState, EnumMoveError,
-      EnumCard, EnumPlayerState, EnumBlockchainType,
+      EnumCard, EnumBlockchainType, EnumPlayerTarget, EnumGasFeeType,
        IBlockchain, IDeck, IDealer, IEnumCard, IGame, IGasFee, IDeposit, IPlayer, IHand, IAsset,
        StructAsset};
     use core::poseidon::poseidon_hash_span;
@@ -72,44 +71,72 @@ mod table {
     fn _create_cards(ref world: IWorldDispatcher) -> Array<EnumCard> nopanic {
         // Step 1: Create cards and put them in a container in order.
        let cards_in_order: Array<EnumCard> =
+       // Eth.
        array![EnumCard::Asset(IAsset::new("ETH [1]", 1, 6)),
        EnumCard::Asset(IAsset::new("ETH [2]", 2, 5)),
        EnumCard::Asset(IAsset::new("ETH [3]", 3, 3)),
        EnumCard::Asset(IAsset::new("ETH [4]", 4, 3)),
        EnumCard::Asset(IAsset::new("ETH [5]", 5, 2)),
        EnumCard::Asset(IAsset::new("ETH [10]", 10, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Aptos", EnumBlockchainType::Grey, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Arbitrum", EnumBlockchainType::LightBlue, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Avalanche", EnumBlockchainType::Red, 2, 4, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Base", EnumBlockchainType::LightBlue, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Bitcoin", EnumBlockchainType::Gold, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Blast", EnumBlockchainType::Yellow,  2, 3, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Canto", EnumBlockchainType::Green, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Celestia", EnumBlockchainType::Purple,  2, 3, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Celo", EnumBlockchainType::Yellow,  2, 3, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Cosmos", EnumBlockchainType::Blue, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Dogecoin", EnumBlockchainType::Gold, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Ethereum", EnumBlockchainType::DarkBlue, 3, 4, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Fantom", EnumBlockchainType::LightBlue, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Gnosis Chain", EnumBlockchainType::Green, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Kava", EnumBlockchainType::Red, 2, 4, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Linea", EnumBlockchainType::Grey, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Metis", EnumBlockchainType::LightBlue, 1, 2, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Near", EnumBlockchainType::Green, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Optimism", EnumBlockchainType::Red, 2, 4, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Osmosis", EnumBlockchainType::Pink, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Polkadot", EnumBlockchainType::Pink, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Polygon", EnumBlockchainType::Purple, 2, 3, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Scroll", EnumBlockchainType::Yellow, 2, 3, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Solana", EnumBlockchainType::Purple,  2, 3, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Taiko", EnumBlockchainType::Pink, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("Ton", EnumBlockchainType::Blue, 1, 1, 1)),
-       EnumCard::Blockchain(IBlockchain::new("ZKSync", EnumBlockchainType::Grey, 1, 2, 1))
+
+       // Blockchains.
+       EnumCard::Blockchain(IBlockchain::new("Aptos", EnumBlockchainType::Grey, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Arbitrum", EnumBlockchainType::LightBlue, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Avalanche", EnumBlockchainType::Red, 2, 4)),
+       EnumCard::Blockchain(IBlockchain::new("Base", EnumBlockchainType::LightBlue, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Bitcoin", EnumBlockchainType::Gold, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Blast", EnumBlockchainType::Yellow,  2, 3)),
+       EnumCard::Blockchain(IBlockchain::new("Canto", EnumBlockchainType::Green, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("Celestia", EnumBlockchainType::Purple,  2, 3)),
+       EnumCard::Blockchain(IBlockchain::new("Celo", EnumBlockchainType::Yellow,  2, 3)),
+       EnumCard::Blockchain(IBlockchain::new("Cosmos", EnumBlockchainType::Blue, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("Dogecoin", EnumBlockchainType::Gold, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Ethereum", EnumBlockchainType::DarkBlue, 3, 4)),
+       EnumCard::Blockchain(IBlockchain::new("Fantom", EnumBlockchainType::LightBlue, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Gnosis Chain", EnumBlockchainType::Green, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("Kava", EnumBlockchainType::Red, 2, 4)),
+       EnumCard::Blockchain(IBlockchain::new("Linea", EnumBlockchainType::Grey, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Metis", EnumBlockchainType::LightBlue, 1, 2)),
+       EnumCard::Blockchain(IBlockchain::new("Near", EnumBlockchainType::Green, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("Optimism", EnumBlockchainType::Red, 2, 4)),
+       EnumCard::Blockchain(IBlockchain::new("Osmosis", EnumBlockchainType::Pink, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("Polkadot", EnumBlockchainType::Pink, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("Polygon", EnumBlockchainType::Purple, 2, 3)),
+       EnumCard::Blockchain(IBlockchain::new("Scroll", EnumBlockchainType::Yellow, 2, 3)),
+       EnumCard::Blockchain(IBlockchain::new("Solana", EnumBlockchainType::Purple,  2, 3)),
+       EnumCard::Blockchain(IBlockchain::new("Starknet", EnumBlockchainType::DarkBlue, 3, 4)),
+       EnumCard::Blockchain(IBlockchain::new("Taiko", EnumBlockchainType::Pink, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("Ton", EnumBlockchainType::Blue, 1, 1)),
+       EnumCard::Blockchain(IBlockchain::new("ZKSync", EnumBlockchainType::Grey, 1, 2)),
+
+       // Actions.
+       // EnumCard::PriorityFee(IPriorityFee::new(1, 10)),
+       // EnumCard::ClaimYield(IClaimYield::new(2, 3)),
+       // EnumCard::MajorityAttack(IMajorityAttack::new(Option::None, Option::None, 5, 1)),
+       // EnumCard::FrontRun(IFrontRun::new(Option::None, Option::None, 3, 3)),
+       EnumCard::GasFee(IGasFee::new(EnumPlayerTarget::All, EnumGasFeeType::AgainstTwo((EnumBlockchainType::DarkBlue,
+                                    EnumBlockchainType::Red)), array![], 1, 2)),
+       EnumCard::GasFee(IGasFee::new(EnumPlayerTarget::All, EnumGasFeeType::AgainstTwo((EnumBlockchainType::Yellow,
+                                    EnumBlockchainType::Purple)), array![], 1, 2)),
+       EnumCard::GasFee(IGasFee::new(EnumPlayerTarget::All, EnumGasFeeType::AgainstTwo((EnumBlockchainType::Green,
+                                    EnumBlockchainType::LightBlue)), array![], 1, 2)),
+       EnumCard::GasFee(IGasFee::new(EnumPlayerTarget::All, EnumGasFeeType::AgainstTwo((EnumBlockchainType::Grey,
+                                    EnumBlockchainType::Pink)), array![], 1, 2)),
+       EnumCard::GasFee(IGasFee::new(EnumPlayerTarget::All, EnumGasFeeType::AgainstTwo((EnumBlockchainType::Blue,
+                                    EnumBlockchainType::Gold)), array![], 1, 2)),
+       EnumCard::GasFee(IGasFee::new(EnumPlayerTarget::None, EnumGasFeeType::Any(EnumBlockchainType::Blue),
+                                    array![], 3, 3)),
+       // EnumCard::ReplayAttack(IReplayAttack::new(1, 2)),
+       // EnumCard::ChainReorg(IChainReorg::new(3, 3)),
+       // EnumCard::HardFork(IHardFork::new(3, 3)),
+       // EnumCard::SoftFork(ISoftFork::new(3, 3)),
+       // EnumCard::MEVBoost(IMEVBoost::new(3, 3)),
         ];
 
         return cards_in_order;
     }
+
+
 
     /// Flatten all copies of blockchains, Assets, and Action Cards in one big array for the dealer.
     ///
@@ -123,10 +150,10 @@ mod table {
         let mut flattened_array = ArrayTrait::new();
 
         while let Option::Some(mut card) = container.pop_front() {
-            let mut copies_left: u8 = card.get_copies_left();
-            while copies_left > 0 {
-                flattened_array.append(card.remove_one_copy());
-                copies_left -= 1;
+            let mut index_left: u8 = card.get_index();
+            while index_left > 0 {
+                flattened_array.append(card.remove_one_index());
+                index_left -= 1;
             };
         };
         return flattened_array;
@@ -190,22 +217,24 @@ mod table {
         if players.is_empty() {
             panic!("There are no players to distribute cards to!");
         }
+        let mut index = 0;
 
-        while let Option::Some(player) = players.pop_front() {
+        while let Option::Some(player) = players.get(index) {
             if cards.is_empty()  {
                 break;
             }
 
-            let mut player_hand = get!(world, (player), (ComponentHand));
+            let mut player_hand = get!(world, (player.unbox().clone()), (ComponentHand));
 
-            let mut index: usize = 0;
-            while index < 5 {
+            let mut inner_index: usize = 0;
+            while inner_index < 5 {
                 if let Option::Some(card_given) = cards.pop_front() {
                     player_hand.add(card_given);
                 }
-                index += 1;
+                inner_index += 1;
             };
 
+            index += 1;
             set!(world, (player_hand));
         };
     }
@@ -223,35 +252,60 @@ mod table {
     /// Can Panic?: yes
     fn _use_card(ref world: IWorldDispatcher, caller: @ContractAddress, card: EnumCard) -> () {
         let (mut hand, mut deck, mut deposit) = get!(world, (*caller), (ComponentHand, ComponentDeck, ComponentDeposit));
-        assert!(hand.contains(@card).is_some(), "Card not in player's hand");
-        hand.remove(@card);
+        assert!(hand.contains(@card.get_name()).is_some(), "Card not in player's hand");
+        hand.remove(@card.get_name());
 
-        match card {
+        match @card {
             EnumCard::Asset(asset) => {
-                deposit.add(EnumCard::Asset(asset));
+                deposit.add(EnumCard::Asset(asset.clone()));
                 set!(world, (deposit));
             },
             EnumCard::Blockchain(blockchain_struct) => {
-                deck.add(EnumCard::Blockchain(blockchain_struct));
+                deck.add(EnumCard::Blockchain(blockchain_struct.clone()));
                 set!(world, (deck));
             },
-            EnumCard::GasFee(mut gas_fee_struct) => {
-                // Check if the player playing it has the right blockchain to play this against.
-                if gas_fee_struct.m_blockchain_type_affected != EnumBlockchainType::Immutable &&
-                    deck.contains_type(@gas_fee_struct.m_blockchain_type_affected).is_none() {
-                    panic!("Invalid Gas Fee move");
-                }
+            EnumCard::ChainReorg(chain_reorg_struct) => {
+                deck.add(EnumCard::ChainReorg(chain_reorg_struct.clone()));
+                set!(world, (deck));
+            },
+            EnumCard::ClaimYield(_claim_yield_struct) => {},
+            EnumCard::GasFee(gas_fee_struct) => {
+                assert!(gas_fee_struct.m_color_chosen.is_some(), "Invalid Gas Fee move: No color specified");
+                match gas_fee_struct.m_blockchain_type_affected {
+                    EnumGasFeeType::Any(color) =>  {
+                        if color != @(*gas_fee_struct.m_color_chosen).unwrap() {
+                            panic!("Invalid Gas Fee move: Color does not match allowed colors");
+                        }
+                    },
+                    EnumGasFeeType::AgainstTwo((color1, color2)) => {
+                        if color1 != @(*gas_fee_struct.m_color_chosen).unwrap() && color2 !=
+                            @(*gas_fee_struct.m_color_chosen).unwrap() {
+                            panic!("Invalid Gas Fee move: Color does not match allowed colors");
+                        }
+                    }
+                };
 
-                let fee = gas_fee_struct.get_fee();
-                if fee.is_none() {
-                    panic!("Invalid Gas Fee move");
-                }
+                let fee: u8 = gas_fee_struct.get_fee();
 
                 // Make every affected player in debt for their next turn.
-                while let Option::Some(player) = gas_fee_struct.m_players_affected.pop_front() {
-                    let mut player_component = get!(world, (player), (ComponentPlayer));
-                    player_component.m_in_debt = fee;
-                    set!(world, (player_component));
+                match gas_fee_struct.m_players_affected {
+                    EnumPlayerTarget::All(_) => {
+                        let mut index = 0;
+                        let game = get!(world, (world.contract_address), (ComponentGame));
+
+                        while index < game.m_players.len() {
+                            let mut player_component = get!(world, (*game.m_players.at(index)), (ComponentPlayer));
+                            player_component.m_in_debt = Option::Some(fee);
+                            set!(world, (player_component));
+                            index += 1;
+                        };
+                    },
+                    EnumPlayerTarget::One(player) => {
+                        let mut player_component = get!(world, (*player), (ComponentPlayer));
+                        player_component.m_in_debt = Option::Some(fee);
+                        set!(world, (player_component));
+                    },
+                    _ => panic!("Invalid Gas Fee move: No players targeted")
                 };
             },
             EnumCard::HardFork(_hardfork_struct) => {
@@ -262,6 +316,10 @@ mod table {
                 // Revert last move for this player.
                 //let revert_action = last_card.revert();
             },
+            EnumCard::MEVBoost(mev_boost_struct) => {
+                deck.add(EnumCard::MEVBoost(mev_boost_struct.clone()));
+                set!(world, (deck));
+            },
             EnumCard::PriorityFee(_priority_fee_struct) => {
                  let mut dealer = get!(world, (world.contract_address), (ComponentDealer));
                  assert!(!dealer.m_cards.is_empty(), "Dealer has no more cards");
@@ -270,33 +328,44 @@ mod table {
                  hand.add(dealer.pop_card().unwrap());
                  set!(world, (hand, dealer));
             },
-            EnumCard::StealBlockchain(frontrun_struct) => {
-                let mut opponent_deck = get!(world, (frontrun_struct.m_owner), (ComponentDeck));
-                let card = EnumCard::StealBlockchain(frontrun_struct.clone());
-                opponent_deck.remove(@card);
-                deck.add(card);
-                set!(world, (deck, opponent_deck));
+            EnumCard::ReplayAttack(_replay_attack_struct) => {},
+            EnumCard::SoftFork(soft_fork_struct) => {
+                deck.add(EnumCard::SoftFork(soft_fork_struct.clone()));
+                set!(world, (deck));
             },
-            EnumCard::StealAssetGroup(mut asset_group_struct) => {
-                let mut opponent_deck = get!(world, (asset_group_struct.m_owner), (ComponentDeck));
+            EnumCard::FrontRun(frontrun_struct) => {
+                let bc_owner = _get_owner(@world, frontrun_struct.m_blockchain_name);
+                assert!(bc_owner.is_some(), "Blockchain in Frontrun card has no owner");
+
+                let mut opponent_deck = get!(world, (bc_owner.unwrap()), (ComponentDeck));
+                if let Option::Some(card_index) = opponent_deck.contains(frontrun_struct.m_blockchain_name) {
+                    deck.add(opponent_deck.m_cards.at(card_index).clone());
+                    opponent_deck.remove(frontrun_struct.m_blockchain_name);
+                    set!(world, (deck, opponent_deck));
+                } else {
+                    panic!("Invalid FrontRun move: Opponent Blockchain not found");
+                }
+            },
+            EnumCard::MajorityAttack(asset_group_struct) => {
+                let mut opponent_deck = get!(world, (*asset_group_struct.m_owner), (ComponentDeck));
                 let mut player = get!(world, (*caller), (ComponentPlayer));
-                let mut opponent_player = get!(world, (asset_group_struct.m_owner), (ComponentPlayer));
+                let mut opponent_player = get!(world, (*asset_group_struct.m_owner), (ComponentPlayer));
 
                 player.m_sets += 1;
                 opponent_player.m_sets -= 1;
 
                 let mut index: usize = 0;
-                while index < asset_group_struct.m_set.len() {
-                    let card = EnumCard::Blockchain(asset_group_struct.m_set.pop_front().unwrap());
-                    opponent_deck.remove(@card);
-                    deck.add(card);
+                while let Option::Some(bc_name) = asset_group_struct.m_set.get(index) {
+                    if let Option::Some(blockchain_index) = opponent_deck.contains(bc_name.unbox()) {
+                        deck.add(opponent_deck.m_cards.at(blockchain_index).clone());
+                        opponent_deck.remove(bc_name.unbox());
+                    }
                     index += 1;
                 };
                 set!(world, (deck, opponent_deck, player, opponent_player));
             },
             _ => panic!("Invalid or illegal move!")
         };
-
 
         return ();
     }
@@ -311,10 +380,42 @@ mod table {
     /// Output:
     /// None.
     /// Can Panic?: yes
-    fn _is_owner(world: @IWorldDispatcher, card: @EnumCard, caller: @ContractAddress) -> bool {
+    fn _is_owner(world: @IWorldDispatcher, card_name: @ByteArray, caller: @ContractAddress) -> bool {
         let (hand, deck, deposit) = get!(*world, (*caller), (ComponentHand, ComponentDeck, ComponentDeposit));
-        return hand.contains(card).is_some() || deck.contains(card).is_some() ||
-            deposit.contains(card).is_some();
+        return hand.contains(card_name).is_some() || deck.contains(card_name).is_some() ||
+            deposit.contains(card_name).is_some();
+    }
+
+    fn _get_owner(world: @IWorldDispatcher, card_name: @ByteArray) -> Option<ContractAddress> {
+        let game = get!(*world, (*world.contract_address), (ComponentGame));
+        assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
+
+        let mut index = 0;
+        let mut owner = Option::None;
+
+        while index < game.m_players.len() {
+            let (hand, deck, deposit) = get!(*world, (*game.m_players.at(index)),
+                (ComponentHand, ComponentDeck, ComponentDeposit));
+
+            if let Option::Some(_) = hand.contains(card_name) {
+                owner = Option::Some(*game.m_players.at(index));
+                break;
+            }
+
+            if let Option::Some(_) = deck.contains(card_name) {
+                owner = Option::Some(*game.m_players.at(index));
+                break;
+            }
+
+            if let Option::Some(_) = deposit.contains(card_name) {
+                owner = Option::Some(*game.m_players.at(index));
+                break;
+            }
+
+            index += 1;
+        };
+
+        return owner;
     }
 
     //////////////////////////////////////////////////////////////////////////////
@@ -345,11 +446,11 @@ mod table {
             assert!(game.m_players.len() < 5, "Lobby already full");
 
             let caller = get_caller_address();
-            game.add_player(caller);
-            let mut new_player: ComponentPlayer = IPlayer::new(caller, username);
-            new_player.m_state = EnumPlayerState::Joined;
 
-            set!(world, (new_player, game));
+            // Initialize players with three moves.
+            let player = IPlayer::new(caller, username);
+            game.add_player(caller);
+            set!(world, (game, player));
             return ();
         }
 
@@ -379,30 +480,11 @@ mod table {
             // Step 3: Distribute 5 cards per player by drawing from the dealer's deck.
             let mut world_ref = world;
             _distribute_cards(ref world_ref, ref game.m_players, ref dealer.m_cards);
+
+            // Step 4: Assign the first turn (clockwise of players joined [FIFO]).
+            game.assign_next_turn(true);
             set!(world, (dealer, game));
             return ();
-        }
-
-        /// Initiate a new turn for the caller, allowing them to play their moves. Upon this system
-        /// call, no other players may initiate a new turn or play as long as the active caller has
-        /// not ended their turn.
-        ///
-        /// Inputs:
-        /// *world*: The mutable reference of the world to write components to.
-        ///
-        /// Output:
-        /// None.
-        /// Can Panic?: yes
-        fn new_turn(ref world: IWorldDispatcher) -> () {
-            let game = get!(world, (world.contract_address), (ComponentGame));
-            assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
-
-            let mut player = get!(world, get_caller_address(), (ComponentPlayer));
-            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state == EnumPlayerState::TurnEnded ||
-                player.m_state == EnumPlayerState::Joined, "Player has already started turn");
-            player.m_state = EnumPlayerState::TurnStarted;
-            set!(world, (player));
         }
 
         /// Adds two new cards from the dealer's deck to the active caller's hand, during their turn.
@@ -423,9 +505,8 @@ mod table {
             let game = get!(world, (world.contract_address), (ComponentGame));
 
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
-            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not player's turn");
-            assert!(player.m_moves_remaining == 3, "Cannot draw mid-turn");
+            assert!(game.m_player_in_turn == caller, "Not player's turn");
+            assert!(!player.m_has_drawn, "Cannot draw mid-turn");
 
             let mut dealer = get!(world, (world.contract_address), ComponentDealer);
             if draws_five {
@@ -441,7 +522,7 @@ mod table {
                     hand.add(card);
                 };
 
-                player.m_state = EnumPlayerState::DrawnCards;
+                player.m_has_drawn = true;
                 set!(world, (hand, dealer, player));
                 return ();
             }
@@ -457,7 +538,7 @@ mod table {
             // Draw two cards.
             hand.add(card1_opt.unwrap());
             hand.add(card2_opt.unwrap());
-            player.m_state = EnumPlayerState::DrawnCards;
+            player.m_has_drawn = true;
             set!(world, (hand, dealer, player));
         }
 
@@ -476,16 +557,15 @@ mod table {
         fn play(ref world: IWorldDispatcher, card: EnumCard) -> () {
             let game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
+            assert!(game.m_player_in_turn == get_caller_address(), "Not player's turn");
 
             let caller = get_caller_address();
             let mut player = get!(world, caller, (ComponentPlayer));
-            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
-            assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
+            assert!(player.m_has_drawn, "Player needs to draw cards first");
             assert!(player.m_moves_remaining != 0, "No moves left");
 
             let mut world_cpy = world;
-            assert!(_is_owner(@world_cpy, @card, @caller), "Player does not own card");
+            assert!(_is_owner(@world_cpy, @card.get_name(), @caller), "Player does not own card");
             _use_card(ref world_cpy, @caller, card);
 
             player.m_moves_remaining -= 1;
@@ -508,15 +588,14 @@ mod table {
         fn move(ref world: IWorldDispatcher, card: EnumCard) -> () {
             let game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
+            assert!(game.m_player_in_turn == get_caller_address(), "Not player's turn");
 
             let caller = get_caller_address();
             let mut player = get!(world, caller, (ComponentPlayer));
-            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state != EnumPlayerState::TurnEnded, "Not player's turn");
-            assert!(player.m_state == EnumPlayerState::DrawnCards, "Player needs to draw cards first");
+            assert!(player.m_has_drawn, "Player needs to draw cards first");
 
             let mut world_cpy = world;
-            assert!(_is_owner(@world_cpy, @card, @caller), "Player does not own card");
+            assert!(_is_owner(@world_cpy, @card.get_name(), @caller), "Player does not own card");
             // TODO: Move card around in deck.
             set!(world, (player));
             return ();
@@ -550,13 +629,13 @@ mod table {
             while let Option::Some(card) = pay.pop_front() {
                 // Give assets or action cards as payment.
                 if !card.is_blockchain() {
-                    payee_stash.remove(@card);
+                    payee_stash.remove(@card.get_name());
                     recipient_stash.add(card);
                     continue;
                 }
 
                 // Give blockchains as payment.
-                payee_deck.remove(@card);
+                payee_deck.remove(@card.get_name());
                 recipient_deck.add(card);
             };
 
@@ -575,15 +654,12 @@ mod table {
         /// None.
         /// Can Panic?: yes
         fn end_turn(ref world: IWorldDispatcher) -> () {
-            let game = get!(world, (world.contract_address), (ComponentGame));
+            let mut game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
+            assert!(game.m_player_in_turn == get_caller_address(), "Not player's turn");
 
-            let mut player = get!(world, get_caller_address(), (ComponentPlayer));
-            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-            assert!(player.m_state == EnumPlayerState::TurnStarted, "Not player's turn");
-
-            player.m_state = EnumPlayerState::TurnEnded;
-            set!(world, (player));
+            game.assign_next_turn(false);
+            set!(world, (game));
             return ();
         }
 
@@ -598,12 +674,9 @@ mod table {
         fn leave(ref world: IWorldDispatcher) -> () {
             let mut game = get!(world, (world.contract_address), (ComponentGame));
             assert!(game.m_state == EnumGameState::Started, "Game has not started yet");
+            assert!(game.contains_player(@get_caller_address()).is_some(), "Player not found");
 
-            let caller = get_caller_address();
-            let player = get!(world, (caller), (ComponentPlayer));
-            assert!(player.m_state != EnumPlayerState::NotJoined, "Player not at table");
-
-            let (mut hand, mut deck, mut deposit) = get!(world, (player.m_ent_owner), (ComponentHand,
+            let (mut hand, mut deck, mut deposit) = get!(world, (get_caller_address()), (ComponentHand,
             ComponentDeck, ComponentDeposit));
 
             // TODO: Cleanup after player by setting all card owner's to 0.
@@ -611,8 +684,8 @@ mod table {
             // deck.discard_cards();
             // deposit.discard_cards();
 
-            game.remove_player(@caller);
-            delete!(world, (player, hand, deck, deposit));
+            game.remove_player(@get_caller_address());
+            delete!(world, (hand, deck, deposit));
             set!(world, (game));
             return ();
         }

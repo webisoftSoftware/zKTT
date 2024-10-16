@@ -25,7 +25,7 @@ mod tests {
     use starknet::{ContractAddress, get_caller_address};
     use zktt::models::components::{ComponentGame, ComponentDeck, ComponentDealer,
          ComponentDeposit, ComponentHand, ComponentPlayer, EnumGameState, EnumMoveError,
-          EnumCard, EnumPlayerState, EnumBlockchainType,
+          EnumCard, EnumBlockchainType, IEnumCard,
            IBlockchain, IDeck, IDealer, IGame, IPlayer, IHand, IAsset,
            StructAsset, StructBlockchain};
     use zktt::systems::game::table;
@@ -36,19 +36,18 @@ mod tests {
         let mut array = array![
         EnumCard::Asset(IAsset::new("ETH [1]", 1, 6)),
         EnumCard::Asset(IAsset::new("ETH [2]", 1, 6)),
-        EnumCard::Blockchain(IBlockchain::new("Optimism", EnumBlockchainType::Red, 2, 4, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Osmosis", EnumBlockchainType::Pink, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Polkadot", EnumBlockchainType::Pink, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Polygon", EnumBlockchainType::Purple, 2, 3, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Scroll", EnumBlockchainType::Yellow, 2, 3, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Solana", EnumBlockchainType::Purple,  2, 3, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Starknet", EnumBlockchainType::DarkBlue, 3, 4, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Taiko", EnumBlockchainType::Pink, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new("Ton", EnumBlockchainType::Blue, 1, 1, 1)),
-        EnumCard::Blockchain(IBlockchain::new("ZKSync", EnumBlockchainType::Grey, 1, 2, 1))
+        EnumCard::Blockchain(IBlockchain::new("Optimism", EnumBlockchainType::Red, 2, 4)),
+        EnumCard::Blockchain(IBlockchain::new("Osmosis", EnumBlockchainType::Pink, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Polkadot", EnumBlockchainType::Pink, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Polygon", EnumBlockchainType::Purple, 2, 3)),
+        EnumCard::Blockchain(IBlockchain::new("Scroll", EnumBlockchainType::Yellow, 2, 3)),
+        EnumCard::Blockchain(IBlockchain::new("Solana", EnumBlockchainType::Purple,  2, 3)),
+        EnumCard::Blockchain(IBlockchain::new("Starknet", EnumBlockchainType::DarkBlue, 3, 4)),
+        EnumCard::Blockchain(IBlockchain::new("Taiko", EnumBlockchainType::Pink, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("Ton", EnumBlockchainType::Blue, 1, 1)),
+        EnumCard::Blockchain(IBlockchain::new("ZKSync", EnumBlockchainType::Grey, 1, 2))
          ];
         let new_array = table::_flatten(array);
-
         assert!(new_array.len() == 22, "There should have been 22 cards in deck!");
     }
 
@@ -70,7 +69,7 @@ mod tests {
         assert!(hand1 == hand2, "Hands should be identical even with different owners");
         assert!(hand2 != hand3, "Hands should NOT be equal");
 
-        hand1.remove(@asset_card1);
+        hand1.remove(@asset_card1.get_name());
         assert!(hand1.m_cards.is_empty(), "Hand should be empty");
     }
 }

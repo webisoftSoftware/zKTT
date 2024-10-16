@@ -22,6 +22,7 @@
 use starknet::ContractAddress;
 use origami_random::deck::{Deck, DeckTrait};
 use core::fmt::{Display, Formatter, Error};
+use debug::PrintTrait;
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
@@ -74,7 +75,8 @@ struct ComponentGame {
     #[key]
     m_ent_seed: felt252,
     m_state: EnumGameState,
-    m_players: Array<ContractAddress>
+    m_players: Array<ContractAddress>,
+    m_player_in_turn: ContractAddress
 }
 
 /// Component that represents the cards held in hand of a player in the game.
@@ -101,23 +103,7 @@ struct ComponentPlayer {
     m_moves_remaining: u8,
     m_score: u32,
     m_sets: u8,
-    m_state: EnumPlayerState,
-    m_in_debt: Option<u8>
-}
-
-/// Component that represents a turn in the game.
-///
-/// Per player.
-#[derive(Drop, Serde, Clone, Debug)]
-#[dojo::model]
-struct ComponentTurn {
-    #[key]
-    m_ent_owner: ContractAddress,
-    m_username: ByteArray,
-    m_moves_remaining: u8,
-    m_score: u32,
-    m_sets: u8,
-    m_state: EnumPlayerState,
+    m_has_drawn: bool,
     m_in_debt: Option<u8>
 }
 
@@ -132,7 +118,7 @@ struct ComponentTurn {
 struct StructAsset {
     m_name: ByteArray,
     m_value: u8,
-    m_copies_left: u8
+    m_index: u8
 }
 
 /// Card containing the info about a specific asset group (set of matching blockchains).
@@ -148,8 +134,7 @@ struct StructBlockchain {
     m_name: ByteArray,
     m_bc_type: EnumBlockchainType,
     m_fee: u8,
-    m_value: u8,
-    m_copies_left: u8
+    m_value: u8
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -158,51 +143,140 @@ struct StructBlockchain {
 /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////
 
-/// Card that allows a player to draw two additional cards, and make it only count as one move.
-#[derive(Drop, Serde, Clone, Introspect, Debug)]
-struct ActionPriorityFee {
+/// Swap a single blockchain with a player.
+///
+/// Fields:
+/// *m_self_blockchain_name*: The name of the blockchain from the caller to be swapped.
+/// *m_opponent_blockchain_name*: The name of the blockchain to look up from the opponent to be
+/// swapped.
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
+#[derive(Drop, Serde, Clone, Introspect, PartialEq, Debug)]
+struct ActionChainReorg {
+    m_self_blockchain_name: ByteArray,
+    m_opponent_blockchain_name: ByteArray,
     m_value: u8,
-    m_copies_left: u8
+    m_index: u8
+}
+
+/// All other players pay you 2 ETH.
+///
+/// Fields:
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
+#[derive(Drop, Serde, Clone, Introspect, PartialEq, Debug)]
+struct ActionClaimYield {
+    m_value: u8,
+    m_index: u8
 }
 
 /// Card that allows a player to steal a blockchain from another player's deck.
+///
+/// Fields:
+/// *m_blockchain_name*: Name of the card to be stolen.
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
 #[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct ActionFrontrun {
-    m_owner: ContractAddress,
-    m_blockchain: StructBlockchain,
+    m_blockchain_name: ByteArray,
     m_value: u8,
-    m_copies_left: u8
+    m_index: u8
 }
 
 /// One player pays a gas fee for each blockchain you own in a selected color.
 /// OR
 /// Every player pays a gas fee for each blockchain you own in either color.
+///
+/// Fields:
+/// *m_players_affected*: Enum indicating who is the target(s) of this action (owing).
+/// *m_blockchain_type_affected*: Enum Specifying what type of gas fee this action is.
+///   If the action is targeted at everyone, one of two colors can be used.
+///   If the action targets only one opponent, only one color can be used.
+/// *m_count*: How the fee will be calculated depnding on how many cards of the same color.
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
 #[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct ActionGasFee {
-    m_players_affected: Array<ContractAddress>,
-    // If there is no Blockchain specified, it can be applied to any Blockchain.
-    m_blockchain_type_affected: EnumBlockchainType,
-    m_boost: Array<u8>,
-    m_count: Option<u8>,  // How many Blockchains stacked.
+    m_players_affected: EnumPlayerTarget,
+    // First blockchain (target one player), second blockchain (Target all players).
+    m_blockchain_type_affected: EnumGasFeeType,
+    m_set_applied: Array<StructBlockchain>,
+    m_color_chosen: Option<EnumBlockchainType>,
     m_value: u8,
-    m_copies_left: u8
+    m_index: u8
 }
 
 /// Useable within 10 seconds of certain Onchain Events - cancels other players Onchain Event card.
-#[derive(Drop, Serde, Clone, Introspect, Debug)]
+///
+/// Fields:
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
+#[derive(Drop, Serde, Clone, Introspect, PartialEq, Debug)]
 struct ActionHardFork {
     m_value: u8,
-    m_copies_left: u8
+    m_index: u8
+}
+
+/// Add onto any full blockchain set owned to add 3 ETH to value.
+///
+/// Fields:
+/// *m_full_set*: A array of blockchain names, pointing to which blockchains should this apply for.
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
+#[derive(Drop, Serde, Clone, Introspect, PartialEq, Debug)]
+struct ActionMEVBoost {
+    m_full_set: Array<ByteArray>,
+    m_value: u8,
+    m_index: u8
 }
 
 /// Steal an asset group from an opponent.
+///
+/// Fields:
+/// *m_full_set*: A array of blockchain names, pointing to which blockchains should this apply for.
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
 #[derive(Drop, Serde, Clone, Introspect, Debug)]
 struct ActionMajorityAttack {
     m_owner: ContractAddress,
-    m_name: ByteArray,
-    m_set: Array<StructBlockchain>,
+    m_set: Array<ByteArray>,
     m_value: u8,
-    m_copies_left: u8
+    m_index: u8
+}
+
+/// Card that allows a player to draw two additional cards, and make it only count as one move.
+///
+/// Fields:
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
+#[derive(Drop, Serde, Clone, Introspect, PartialEq, Debug)]
+struct ActionPriorityFee {
+    m_value: u8,
+    m_index: u8
+}
+
+/// Played before Gas Fee card, doubles amount of ETH paid to player.
+///
+/// Fields:
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
+#[derive(Drop, Serde, Clone, Introspect, PartialEq, Debug)]
+struct ActionReplayAttack {
+    m_value: u8,
+    m_index: u8
+}
+
+/// Add onto any full blockchain set owned to add 4 ETH to value.
+///
+/// Fields:
+/// *m_full_set*: A array of blockchain names, pointing to which blockchains should this apply for.
+/// *m_value*: Value of the card itself, in case we want to give it as eth.
+/// *m_index*: The card index from all of its duplicates in the deck.
+#[derive(Drop, Serde, Clone, Introspect, PartialEq, Debug)]
+struct ActionSoftFork {
+    m_full_set: Array<ByteArray>,
+    m_value: u8,
+    m_index: u8
 }
 
 /////////////////////////////////////////////////////////////////////////
@@ -243,10 +317,20 @@ impl ComponentHandDisplay of Display<ComponentHand> {
     }
 }
 
+impl ComponentPlayerDisplay of Display<ComponentPlayer> {
+    fn fmt(self: @ComponentPlayer, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Owner: {0}, Player: {1}, Asset Groups Owned: {2}, Moves remaining: {3}, Score: {4}",
+         starknet::contract_address_to_felt252(*self.m_ent_owner), self.m_username, *self.m_sets,
+          *self.m_moves_remaining, *self.m_score);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
 impl StructAssetDisplay of Display<StructAsset> {
     fn fmt(self: @StructAsset, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Asset: {0}, Value: {1}, Copies Left: {2}",
-         self.m_name, *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("Asset: {0}, Value: {1}, Index: {2}",
+         self.m_name, *self.m_value, *self.m_index);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -254,8 +338,26 @@ impl StructAssetDisplay of Display<StructAsset> {
 
 impl StructBlockchainDisplay of Display<StructBlockchain> {
     fn fmt(self: @StructBlockchain, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Blockchain: {0}, Type: {1}, Fee: {2}, Value {3}, Copies Left: {4}",
-         self.m_name, self.m_bc_type, *self.m_fee, *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("Blockchain: {0}, Type: {1}, Fee: {2}, Value {3}",
+         self.m_name, self.m_bc_type, *self.m_fee, *self.m_value);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl ActionChainReorgDisplay of Display<ActionChainReorg> {
+    fn fmt(self: @ActionChainReorg, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Chain Reorg: Value {0}, Index {1}", *self.m_value,
+        *self.m_index);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl ActionClaimYieldDisplay of Display<ActionClaimYield> {
+    fn fmt(self: @ActionClaimYield, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Claim Yield: Value {0}, Index {1}", *self.m_value,
+        *self.m_index);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -263,9 +365,8 @@ impl StructBlockchainDisplay of Display<StructBlockchain> {
 
 impl ActionFrontrunDisplay of Display<ActionFrontrun> {
     fn fmt(self: @ActionFrontrun, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Steal Blockchain: Original_owner: {0}, Blockchain: {1},
-        Value {2}, Copies Left: {3}", starknet::contract_address_to_felt252(*self.m_owner),
-         self.m_blockchain, *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("Steal Blockchain: Blockchain: {0},
+        Value {1}, Index: {2}", self.m_blockchain_name, *self.m_value, *self.m_index);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -273,8 +374,17 @@ impl ActionFrontrunDisplay of Display<ActionFrontrun> {
 
 impl ActionHardForkDisplay of Display<ActionHardFork> {
     fn fmt(self: @ActionHardFork, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Deny Card: Value {0}, Copies Left {1}", *self.m_value,
-        *self.m_copies_left);
+        let str: ByteArray = format!("Deny: Value {0}, Index {1}", *self.m_value,
+        *self.m_index);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl ActionMEVBoostDisplay of Display<ActionMEVBoost> {
+    fn fmt(self: @ActionMEVBoost, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("MEV Boost: Value {0}, Index {1}", *self.m_value,
+        *self.m_index);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -282,8 +392,26 @@ impl ActionHardForkDisplay of Display<ActionHardFork> {
 
 impl ActionPriorityFeeDisplay of Display<ActionPriorityFee> {
     fn fmt(self: @ActionPriorityFee, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Draw Two Cards: Value {0}, Copies Left {1}",
-         *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("Draw Two Cards: Value {0}, Index {1}",
+         *self.m_value, *self.m_index);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl ActionReplayAttackDisplay of Display<ActionReplayAttack> {
+    fn fmt(self: @ActionReplayAttack, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Replay Attack: Value {0}, Index {1}", *self.m_value,
+        *self.m_index);
+        f.buffer.append(@str);
+        return Result::Ok(());
+    }
+}
+
+impl ActionSoftForkDisplay of Display<ActionSoftFork> {
+    fn fmt(self: @ActionSoftFork, ref f: Formatter) -> Result<(), Error> {
+        let str: ByteArray = format!("Soft Fork: Value {0}, Index {1}", *self.m_value,
+        *self.m_index);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -312,11 +440,11 @@ impl EnumCardDisplay of Display<EnumCard> {
                 let str: ByteArray = format!("{data}");
                 f.buffer.append(@str);
             },
-            EnumCard::StealBlockchain(data) => {
+            EnumCard::FrontRun(data) => {
                 let str: ByteArray = format!("{data}");
                 f.buffer.append(@str);
             },
-            EnumCard::StealAssetGroup(data) => {
+            EnumCard::MajorityAttack(data) => {
                 let str: ByteArray = format!("{data}");
                 f.buffer.append(@str);
             },
@@ -378,6 +506,23 @@ impl EnumBlockchainTypeDisplay of Display<EnumBlockchainType> {
     }
 }
 
+impl EnumGasFeeTypeDisplay of Display<EnumGasFeeType> {
+    fn fmt(self: @EnumGasFeeType, ref f: Formatter) -> Result<(), Error> {
+        match self {
+            EnumGasFeeType::Any(color) => {
+                let str: ByteArray = format!("Against One: {0}", color);
+                f.buffer.append(@str);
+            },
+            EnumGasFeeType::AgainstTwo((color1, color2)) => {
+                let str: ByteArray = format!("Against Two: {0}, {1}", color1, color2);
+                f.buffer.append(@str);
+            }
+        };
+
+        return Result::Ok(());
+    }
+}
+
 impl EnumMoveErrorDisplay of Display<EnumMoveError> {
     fn fmt(self: @EnumMoveError, ref f: Formatter) -> Result<(), Error> {
         match self {
@@ -404,8 +549,8 @@ impl EnumMoveErrorDisplay of Display<EnumMoveError> {
 
 impl ActionGasFeeDisplay of Display<ActionGasFee> {
     fn fmt(self: @ActionGasFee, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Targeted Blockchain: {0} Value {1}, Copies Left {2}",
-         self.m_blockchain_type_affected, *self.m_value, *self.m_copies_left);
+        let str: ByteArray = format!("Gas Fee: Targeted Blockchain: {0}, Value {1}, Index {2}",
+        self.m_blockchain_type_affected, *self.m_value, *self.m_index);
         f.buffer.append(@str);
         return Result::Ok(());
     }
@@ -421,15 +566,6 @@ impl ActionMajorityAttackDisplay of Display<ActionMajorityAttack> {
             }
         };
 
-        return Result::Ok(());
-    }
-}
-
-impl PlayerDisplay of Display<ComponentPlayer> {
-    fn fmt(self: @ComponentPlayer, ref f: Formatter) -> Result<(), Error> {
-        let str: ByteArray = format!("Player: {0}, Asset Groups Owned: {1}, Moves remaining: {2}, Score: {3}",
-         self.m_username, *self.m_sets, *self.m_moves_remaining, *self.m_score);
-        f.buffer.append(@str);
         return Result::Ok(());
     }
 }
@@ -462,37 +598,41 @@ impl HandPartialEq of PartialEq<ComponentHand> {
 
 impl StructAssetEq of PartialEq<StructAsset> {
     fn eq(lhs: @StructAsset, rhs: @StructAsset) -> bool {
-        return lhs.m_name == rhs.m_name && lhs.m_copies_left == rhs.m_copies_left;
+        return lhs.m_name == rhs.m_name && lhs.m_index == rhs.m_index;
+    }
+}
+
+impl StructAssetGroupEq of PartialEq<StructAssetGroup> {
+    fn eq(lhs: @StructAssetGroup, rhs: @StructAssetGroup) -> bool {
+        let mut index: usize = 0;
+        return loop {
+            if index >= lhs.m_set.len() {
+                break true;
+            }
+
+            if lhs.m_set.at(index) != rhs.m_set.at(index) {
+                break false;
+            }
+            index += 1;
+        };
     }
 }
 
 impl StructBlockchainEq of PartialEq<StructBlockchain> {
     fn eq(lhs: @StructBlockchain, rhs: @StructBlockchain) -> bool {
-        return lhs.m_name == rhs.m_name && lhs.m_copies_left == rhs.m_copies_left;
+        return lhs.m_name == rhs.m_name;
     }
 }
 
 impl ActionFrontrunEq of PartialEq<ActionFrontrun> {
     fn eq(lhs: @ActionFrontrun, rhs: @ActionFrontrun) -> bool {
-        return lhs.m_copies_left == rhs.m_copies_left;
-    }
-}
-
-impl ActionHardForkEq of PartialEq<ActionHardFork> {
-    fn eq(lhs: @ActionHardFork, rhs: @ActionHardFork) -> bool {
-        return lhs.m_copies_left == rhs.m_copies_left;
-    }
-}
-
-impl ActionPriorityFeeEq of PartialEq<ActionPriorityFee> {
-    fn eq(lhs: @ActionPriorityFee, rhs: @ActionPriorityFee) -> bool {
-        return lhs.m_copies_left == rhs.m_copies_left;
+        return lhs.m_index == rhs.m_index;
     }
 }
 
 impl ActionGasFeeEq of PartialEq<ActionGasFee> {
     fn eq(lhs: @ActionGasFee, rhs: @ActionGasFee) -> bool {
-        return lhs.m_copies_left == rhs.m_copies_left;
+        return lhs.m_index == rhs.m_index;
     }
 }
 
@@ -518,16 +658,21 @@ impl ActionMajorityAttackEq of PartialEq<ActionMajorityAttack> {
 ////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////
 
-impl EnumCardInto of Into<EnumCard, ByteArray> {
-    fn into(self: EnumCard) -> ByteArray {
+impl EnumCardInto of Into<@EnumCard, ByteArray> {
+    fn into(self: @EnumCard) -> ByteArray {
         return match self {
             EnumCard::Asset(asset_struct) => format!("{0}", asset_struct.m_name),
             EnumCard::Blockchain(bc_struct) => format!("{0}", bc_struct.m_name),
+            EnumCard::ChainReorg(_) => "Chain Reorg",
+            EnumCard::ClaimYield(_) => "Claim Yield",
             EnumCard::GasFee(_) => "Gas Fee",
             EnumCard::HardFork(_) => "Hardfork",
+            EnumCard::MEVBoost(_) => "MEV Boost",
             EnumCard::PriorityFee(_) => "Priority Fee",
-            EnumCard::StealBlockchain(_) => "Frontrun",
-            EnumCard::StealAssetGroup(_) => "51% Attack",
+            EnumCard::ReplayAttack(_) => "Replay Attack",
+            EnumCard::SoftFork(_) => "Soft Fork",
+            EnumCard::FrontRun(_) => "Frontrun",
+            EnumCard::MajorityAttack(_) => "51% Attack",
         };
     }
 }
@@ -545,7 +690,7 @@ impl StructAssetImpl of IAsset {
         return StructAsset {
             m_name: name,
             m_value: value,
-            m_copies_left: copies_left
+            m_index: copies_left
         };
     }
 }
@@ -562,13 +707,12 @@ impl StructAssetGroupImpl of IAssetGroup {
 
 #[generate_trait]
 impl StructBlockchainImpl of IBlockchain {
-    fn new(name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8, copies_left: u8) -> StructBlockchain nopanic {
+    fn new(name: ByteArray, bc_type: EnumBlockchainType, fee: u8, value: u8) -> StructBlockchain nopanic {
         return StructBlockchain {
             m_name: name,
             m_bc_type: bc_type,
             m_fee: fee,
-            m_value: value,
-            m_copies_left: copies_left
+            m_value: value
         };
     }
 }
@@ -578,7 +722,7 @@ impl StructPriorityFeeImpl of IDraw {
     fn new(value: u8, copies_left: u8) -> ActionPriorityFee nopanic {
         return ActionPriorityFee {
             m_value: value,
-            m_copies_left: copies_left
+            m_index: copies_left
         };
     }
 }
@@ -619,20 +763,21 @@ impl DealerImpl of IDealer {
 #[generate_trait]
 impl DeckImpl of IDeck {
     fn add(ref self: ComponentDeck, mut bc: EnumCard) -> () {
-        if let Option::Some(_) = self.contains(@bc) {
+        if let Option::Some(_) = self.contains(@bc.get_name()) {
             panic!("{0}", EnumMoveError::CardAlreadyPresent);
         }
 
         self.m_cards.append(bc);
     }
 
-    fn contains(self: @ComponentDeck, bc: @EnumCard) -> Option<usize> {
+    fn contains(self: @ComponentDeck, bc_name: @ByteArray) -> Option<usize> {
         let mut index = 0;
         let mut found = Option::None;
 
         while index < self.m_cards.len() {
             if let Option::Some(bc_found) = self.m_cards.get(index) {
-                if bc == bc_found.unbox() {
+                let bc_found = bc_found.unbox();
+                if bc_name == @bc_found.get_name() {
                     found = Option::Some(index);
                     break;
                 }
@@ -660,7 +805,7 @@ impl DeckImpl of IDeck {
         return found;
     }
 
-    fn remove(ref self: ComponentDeck, card_name: @EnumCard) -> () {
+    fn remove(ref self: ComponentDeck, card_name: @ByteArray) -> () {
         if let Option::Some(index_found) = self.contains(card_name) {
             let mut new_array = ArrayTrait::new();
 
@@ -706,19 +851,7 @@ impl DeckImpl of IDeck {
             bc_type: @EnumBlockchainType) -> bool {
         return match bc_type {
             EnumBlockchainType::Immutable(_) => { return false; },
-            EnumBlockchainType::Blue(_) => {
-                if asset_group_array.len() == 2 {
-                    return true;
-                }
-                return false;
-            },
-            EnumBlockchainType::DarkBlue(_) => {
-                if asset_group_array.len() == 2 {
-                    return true;
-                }
-                return false;
-            },
-            EnumBlockchainType::Gold(_) => {
+            EnumBlockchainType::Blue(_) | EnumBlockchainType::DarkBlue(_) | EnumBlockchainType::Gold(_) => {
                 if asset_group_array.len() == 2 {
                     return true;
                 }
@@ -741,67 +874,101 @@ impl DeckImpl of IDeck {
 }
 
 #[generate_trait]
+impl EnumBlockchainTypeImpl of IEnumBlockchainType {
+    fn get_boost_array(self: @EnumBlockchainType) -> Array<u8> {
+        return match self {
+            EnumBlockchainType::Immutable => {
+                return array![];
+            },
+            EnumBlockchainType::Blue => {
+                return array![1, 2];
+            },
+            EnumBlockchainType::DarkBlue => {
+                return array![3, 8];
+            },
+            EnumBlockchainType::Gold => {
+                return array![1, 2];
+            },
+            EnumBlockchainType::Green => {
+                return array![1, 3, 5];
+            },
+            EnumBlockchainType::Grey => {
+                return array![1, 2, 4];
+            },
+            EnumBlockchainType::LightBlue => {
+                return array![1, 2, 3, 4];
+            },
+            EnumBlockchainType::Pink => {
+                return array![1, 2, 3];
+            },
+            EnumBlockchainType::Purple => {
+                return array![2, 4, 6];
+            },
+            EnumBlockchainType::Red => {
+                return array![2, 4, 7];
+            },
+            EnumBlockchainType::Yellow => {
+                return array![2, 3, 6];
+            },
+        };
+    }
+}
+
+#[generate_trait]
 impl EnumCardImpl of IEnumCard {
     fn distribute(ref self: EnumCard, in_container: Array<EnumCard>) -> Array<EnumCard> {
-        assert!(self.get_copies_left() > 0, "No more copies left for {0}", self);
+        assert!(self.get_index() > 0, "No more indices left for {0}", self);
 
         let mut new_array = ArrayTrait::new();
-        while self.get_copies_left() != 0 {
-            new_array.append(self.remove_one_copy());
+        while self.get_index() != 0 {
+            new_array.append(self.remove_one_index());
         };
         return new_array;
     }
 
-    fn get_copies_left(self: @EnumCard) -> u8 {
+    fn get_index(self: @EnumCard) -> u8 {
         return match self {
             EnumCard::Asset(data) => {
-                return *data.m_copies_left;
+                return *data.m_index;
             },
-            EnumCard::Blockchain(data) => {
-                return *data.m_copies_left;
+            EnumCard::Blockchain(_data) => {
+                return 1;
+            },
+            EnumCard::ChainReorg(data) => {
+                return *data.m_index;
+            },
+            EnumCard::ClaimYield(data) => {
+                return *data.m_index;
             },
             EnumCard::GasFee(data) => {
-                return *data.m_copies_left;
+                return *data.m_index;
             },
             EnumCard::HardFork(data) => {
-                return *data.m_copies_left;
+                return *data.m_index;
+            },
+            EnumCard::MEVBoost(data) => {
+                return *data.m_index;
             },
             EnumCard::PriorityFee(data) => {
-                return *data.m_copies_left;
+                return *data.m_index;
             },
-            EnumCard::StealBlockchain(data) => {
-                return *data.m_copies_left;
+            EnumCard::ReplayAttack(data) => {
+                return *data.m_index;
             },
-            EnumCard::StealAssetGroup(_) => {
+            EnumCard::SoftFork(data) => {
+                return *data.m_index;
+            },
+            EnumCard::FrontRun(data) => {
+                return *data.m_index;
+            },
+            EnumCard::MajorityAttack(_) => {
                 return 0;
             }
         };
     }
 
     fn get_name(self: @EnumCard) -> ByteArray {
-        return match self {
-            EnumCard::Asset(data) => {
-                return data.m_name.clone();
-            },
-            EnumCard::Blockchain(data) => {
-                return data.m_name.clone();
-            },
-            EnumCard::GasFee(_) => {
-                return "Gas Fee";
-            },
-            EnumCard::HardFork(_) => {
-                return "Hardfork";
-            },
-            EnumCard::PriorityFee(_) => {
-                return "Priority Fee";
-            },
-            EnumCard::StealBlockchain(_) => {
-                return "Frontrun";
-            },
-            EnumCard::StealAssetGroup(_) => {
-                return "51% Attack";
-            }
-        };
+        return self.into();
     }
 
     fn get_value(self: @EnumCard) -> u8 {
@@ -812,61 +979,97 @@ impl EnumCardImpl of IEnumCard {
             EnumCard::Blockchain(data) => {
                 return *data.m_value;
             },
+            EnumCard::ChainReorg(data) => {
+                return *data.m_value;
+            },
+            EnumCard::ClaimYield(data) => {
+                return *data.m_value;
+            },
             EnumCard::GasFee(data) => {
                 return *data.m_value;
             },
             EnumCard::HardFork(data) => {
                 return *data.m_value;
             },
+            EnumCard::MEVBoost(data) => {
+                return *data.m_value;
+            },
             EnumCard::PriorityFee(data) => {
                 return *data.m_value;
             },
-            EnumCard::StealBlockchain(data) => {
+            EnumCard::ReplayAttack(data) => {
                 return *data.m_value;
             },
-            EnumCard::StealAssetGroup(data) => {
+            EnumCard::SoftFork(data) => {
+                return *data.m_value;
+            },
+            EnumCard::FrontRun(data) => {
+                return *data.m_value;
+            },
+            EnumCard::MajorityAttack(data) => {
                 return *data.m_value;
             }
         };
     }
 
-    fn remove_one_copy(self: @EnumCard) -> EnumCard {
+    fn remove_one_index(self: @EnumCard) -> EnumCard {
         return match self.clone() {
             EnumCard::Asset(mut data) => {
-                assert!(data.m_copies_left > 0, "No more copies left for {0}", data);
-                data.m_copies_left -= 1;
-                return EnumCard::Asset(data.clone());
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::Asset(data);
             },
-            EnumCard::Blockchain(mut data) => {
-                assert!(data.m_copies_left > 0, "No more copies left for {0}", data);
-                data.m_copies_left -= 1;
-                return EnumCard::Blockchain(data.clone());
+            EnumCard::ChainReorg(mut data) => {
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::ChainReorg(data);
+            },
+            EnumCard::ClaimYield(mut data) => {
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::ClaimYield(data);
             },
             EnumCard::GasFee(mut data) => {
-                assert!(data.m_copies_left > 0, "No more copies left for {0}", data);
-                data.m_copies_left -= 1;
-                return EnumCard::GasFee(data.clone());
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::GasFee(data);
             },
             EnumCard::HardFork(mut data) => {
-                assert!(data.m_copies_left > 0, "No more copies left for {0}", data);
-                data.m_copies_left -= 1;
-                return EnumCard::HardFork(data.clone());
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::HardFork(data);
+            },
+            EnumCard::MEVBoost(mut data) => {
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::MEVBoost(data);
             },
             EnumCard::PriorityFee(mut data) => {
-                assert!(data.m_copies_left > 0, "No more copies left for {0}", data);
-                data.m_copies_left -= 1;
-                return EnumCard::PriorityFee(data.clone());
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::PriorityFee(data);
             },
-            EnumCard::StealBlockchain(mut data) => {
-                assert!(data.m_copies_left > 0, "No more copies left for {0}", data);
-                data.m_copies_left -= 1;
-                return EnumCard::StealBlockchain(data.clone());
+            EnumCard::ReplayAttack(mut data) => {
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::ReplayAttack(data);
             },
-            EnumCard::StealAssetGroup(mut data) => {
-                assert!(data.m_copies_left > 0, "No more copies left for {0}", data);
-                data.m_copies_left -= 1;
-                return EnumCard::StealAssetGroup(data.clone());
-            }
+            EnumCard::SoftFork(mut data) => {
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::SoftFork(data);
+            },
+            EnumCard::FrontRun(mut data) => {
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::FrontRun(data);
+            },
+            EnumCard::MajorityAttack(mut data) => {
+                assert!(data.m_index > 0, "No more indices left for {0}", data);
+                data.m_index -= 1;
+                return EnumCard::MajorityAttack(data);
+            },
+            _ => { return self.clone(); }
         };
     }
 
@@ -924,29 +1127,41 @@ impl GameImpl of IGame {
             };
         }
     }
+
+    fn assign_next_turn(ref self: ComponentGame, is_start: bool) -> () {
+        if is_start {
+            assert!(!self.m_players.is_empty(), "No players in game");
+            self.m_player_in_turn = *self.m_players.at(0);
+            return;
+        }
+
+        if let Option::Some(position) = self.contains_player(@self.m_player_in_turn) {
+            if position + 1 == self.m_players.len() {
+                self.m_player_in_turn = *self.m_players.at(0);
+                return;
+            }
+            assert!(self.m_players.get(position + 1).is_some(), "Player not found");
+            self.m_player_in_turn = *self.m_players.at(position + 1);
+        }
+    }
 }
 
 #[generate_trait]
 impl GasFeeImpl of IGasFee {
-    fn new(players: Array<ContractAddress>, bc_affected: EnumBlockchainType, boost: Array<u8>,
-     count: Option<u8>, value: u8, copies_left: u8) -> ActionGasFee {
+    fn new(players_affected: EnumPlayerTarget, bc_affected: EnumGasFeeType,
+        set_applied: Array<StructBlockchain>, value: u8, copies_left: u8) -> ActionGasFee nopanic {
         return ActionGasFee {
-            m_players_affected: players,
-            // If there is no Blockchain specified, it can be applied to any Blockchain.
+            m_players_affected: players_affected,
+            m_set_applied: set_applied,
             m_blockchain_type_affected: bc_affected,
-            m_boost: boost,
-            m_count: count,  // How many Blockchains stacked.
+            m_color_chosen: Option::None,
             m_value: value,
-            m_copies_left: copies_left
+            m_index: copies_left
         };
     }
 
-    fn get_fee(self: @ActionGasFee) -> Option<u8> {
-        if self.m_count.is_none() {
-            return Option::None;
-        }
-
-        return Option::Some(*self.m_boost.at(self.m_count.clone().unwrap().into()));
+    fn get_fee(self: @ActionGasFee) -> u8 {
+        return *self.m_set_applied.at(0).m_bc_type.get_boost_array().at(self.m_set_applied.len());
     }
 }
 
@@ -967,7 +1182,7 @@ impl HandImpl of IHand {
         self.m_cards.append(card);
     }
 
-    fn contains(self: @ComponentHand, card: @EnumCard) -> Option<usize> {
+    fn contains(self: @ComponentHand, card_name: @ByteArray) -> Option<usize> {
         let mut index: usize = 0;
 
         return loop {
@@ -975,15 +1190,15 @@ impl HandImpl of IHand {
                 break Option::None;
             }
 
-            if self.m_cards.at(index) == card {
+            if @self.m_cards.at(index).get_name() == card_name {
                 break Option::Some(index);
             }
             index += 1;
         };
     }
 
-    fn remove(ref self: ComponentHand, card: @EnumCard) -> () {
-        if let Option::Some(index_found) = self.contains(card) {
+    fn remove(ref self: ComponentHand, card_name: @ByteArray) -> () {
+        if let Option::Some(index_found) = self.contains(card_name) {
             let mut index: usize = 0;
             let mut new_array: Array<EnumCard> = ArrayTrait::new();
             while let Option::Some(card) = self.m_cards.pop_front() {
@@ -1016,7 +1231,7 @@ impl DepositImpl of IDeposit {
         return ();
     }
 
-    fn contains(self: @ComponentDeposit, card: @EnumCard) -> Option<usize> {
+    fn contains(self: @ComponentDeposit, card_name: @ByteArray) -> Option<usize> {
         let mut index: usize = 0;
 
         return loop {
@@ -1024,7 +1239,7 @@ impl DepositImpl of IDeposit {
                 break Option::None;
             }
 
-            if self.m_cards.at(index) == card {
+            if @self.m_cards.at(index).get_name() == card_name {
                 break Option::Some(index);
             }
 
@@ -1032,9 +1247,9 @@ impl DepositImpl of IDeposit {
         };
     }
 
-    fn remove(ref self: ComponentDeposit, card: @EnumCard) -> () {
-        if let Option::Some(index_found) = self.contains(card) {
-            self.m_total_value -= card.get_value();
+    fn remove(ref self: ComponentDeposit, card_name: @ByteArray) -> () {
+        if let Option::Some(index_found) = self.contains(card_name) {
+            self.m_total_value -= self.m_cards.at(index_found).get_value();
             let mut new_array: Array<EnumCard> = ArrayTrait::new();
             let mut index: usize = 0;
             while let Option::Some(card) = self.m_cards.pop_front() {
@@ -1060,7 +1275,7 @@ impl PlayerImpl of IPlayer {
             m_moves_remaining: 3,
             m_score: 0,
             m_sets: 0,
-            m_state: EnumPlayerState::TurnEnded,
+            m_has_drawn: false,
             m_in_debt: Option::None
         };
     }
@@ -1076,57 +1291,60 @@ impl PlayerImpl of IPlayer {
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-#[derive(Drop, Serde, Clone, PartialEq, Introspect, Debug)]
+#[derive(Drop, Serde, Copy, PartialEq, Introspect, Debug)]
 enum EnumBlockchainType {
-    Immutable: (),
-    Blue: (),
-    DarkBlue: (),
-    Gold: (),
-    Green: (),
-    Grey: (),
-    LightBlue: (),
-    Pink: (),
-    Purple: (),
-    Red: (),
-    Yellow: ()
+    Immutable,
+    Blue,
+    DarkBlue,
+    Gold,
+    Green,
+    Grey,
+    LightBlue,
+    Pink,
+    Purple,
+    Red,
+    Yellow,
 }
 
 #[derive(Drop, Serde, Clone, PartialEq, Introspect, Debug)]
 enum EnumCard {
     Asset: StructAsset,
     Blockchain: StructBlockchain,
+    ChainReorg: ActionChainReorg,
+    ClaimYield: ActionClaimYield,
     GasFee: ActionGasFee,
     HardFork: ActionHardFork,
+    MEVBoost: ActionMEVBoost,
     PriorityFee: ActionPriorityFee,
-    StealBlockchain: ActionFrontrun,
-    StealAssetGroup: ActionMajorityAttack,
+    SoftFork: ActionSoftFork,
+    ReplayAttack: ActionReplayAttack,
+    FrontRun: ActionFrontrun,
+    MajorityAttack: ActionMajorityAttack
 }
 
-#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
+#[derive(Drop, Copy, Serde, PartialEq, Introspect, Debug)]
+enum EnumPlayerTarget {
+    All: (),
+    None: (),
+    One: ContractAddress,
+}
+
+#[derive(Drop, Copy, Serde, PartialEq, Introspect, Debug)]
+enum EnumGasFeeType {
+    Any: EnumBlockchainType,
+    AgainstTwo: (EnumBlockchainType, EnumBlockchainType),
+}
+
+#[derive(Drop, Copy, Serde, PartialEq, Introspect, Debug)]
 enum EnumGameState {
     WaitingForPlayers: (),
     Started: ()
 }
 
-#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
-enum EnumLocation {
-    Deposit: (),
-    Deck: ()
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
+#[derive(Drop, Copy, Serde, PartialEq, Introspect, Debug)]
 enum EnumMoveError {
-    CardAlreadyPresent: (),
-    CardNotFound: (),
-    NotEnoughMoves: (),
-    SetAlreadyPresent: ()
-}
-
-#[derive(Copy, Drop, Serde, PartialEq, Introspect, Debug)]
-enum EnumPlayerState {
-    NotJoined: (),
-    Joined: (),
-    DrawnCards: (),
-    TurnStarted: (),
-    TurnEnded: (),
+    CardAlreadyPresent,
+    CardNotFound,
+    NotEnoughMoves,
+    SetAlreadyPresent
 }
