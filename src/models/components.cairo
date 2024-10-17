@@ -20,15 +20,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 use starknet::ContractAddress;
-use origami_random::deck::{Deck, DeckTrait};
+// use origami_random::deck::{Deck, DeckTrait};
 use core::fmt::{Display, Formatter, Error};
 use debug::PrintTrait;
+use cartridge_vrf::IVrfProviderDispatcher;
+use cartridge_vrf::IVrfProviderDispatcherTrait;
+use cartridge_vrf::Source;
 
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 /////////////////////////////// COMPONENTS /////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////
+
+const VRF_PROVIDER_ADDRESS: felt252 = 0x051fea4450da9d6aee758bdeba88b2f665bcbf549d2c61421aa724e9ac0ced8f;
 
 /// Component that represents the Pile of cards in the middle of the board, not owned by any player
 /// yet.
@@ -738,14 +743,20 @@ impl DealerImpl of IDealer {
 
     fn shuffle(ref self: ComponentDealer, seed: felt252) -> () {
         let mut shuffled_cards: Array<EnumCard> = ArrayTrait::new();
-        let mut deck = DeckTrait::new(seed, self.m_cards.len());
+        // let mut deck = DeckTrait::new(seed, self.m_cards.len());
+        let vrf_provider = IVrfProviderDispatcher { contract_address:
+            starknet::contract_address_const::<VRF_PROVIDER_ADDRESS>() };
+        let mut random_value: u256 = vrf_provider.consume_random(Source::Salt(seed)).into();
+        let mut max_number: u32 = self.m_cards.len() - 1;
 
-        while deck.remaining > 0 {
+        while max_number > 0 {
             // Draw a random number from 0 to 105.
-            let card_index: u8 = deck.draw();
+            random_value = vrf_provider.consume_random(Source::Salt(seed)).into();
+            let card_index: u8 = (random_value % max_number.into()).try_into().unwrap();
 
             if let Option::Some(_) = self.m_cards.get(card_index.into()) {
                 shuffled_cards.append(self.m_cards[card_index.into()].clone());
+                max_number -= 1;
             }
         };
         self.m_cards = shuffled_cards;
